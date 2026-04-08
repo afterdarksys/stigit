@@ -49,7 +49,7 @@ struct StagingModalView: View {
                     .padding(.top, 5)
                 
                 ScrollView {
-                    Text(RemediationService.generateStagingScript(for: activeRemediations))
+                    Text(RemediationService.stagingScript(for: activeRemediations))
                         .font(.system(.body, design: .monospaced))
                         .padding()
                         .frame(maxWidth: .infinity, alignment: .leading)
@@ -84,7 +84,7 @@ struct StagingModalView: View {
                     }
                     .buttonStyle(.borderedProminent)
                     .controlSize(.large)
-                    .disabled(isSubmitting || RemediationService.generateStagingScript(for: activeRemediations).isEmpty)
+                    .disabled(isSubmitting || RemediationService.stagingScript(for: activeRemediations).isEmpty)
                 }
             }
         }

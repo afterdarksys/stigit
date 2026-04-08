@@ -33,7 +33,7 @@ struct StagingView: View {
                 .padding(.top, 10)
             
             ScrollView {
-                Text(RemediationService.generateStagingScript(for: store.activeRules))
+                Text(RemediationService.stagingScript(for: store.activeRules))
                     .font(.system(.body, design: .monospaced))
                     .padding()
                     .frame(maxWidth: .infinity, alignment: .leading)
@@ -52,7 +52,7 @@ struct StagingView: View {
                 }
                 .buttonStyle(.borderedProminent)
                 .controlSize(.large)
-                .disabled(isSubmitting || RemediationService.generateStagingScript(for: store.activeRules).isEmpty)
+                .disabled(isSubmitting || RemediationService.stagingScript(for: store.activeRules).isEmpty)
                 
                 if isSubmitting {
                     ProgressView()

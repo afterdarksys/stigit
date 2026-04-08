@@ -4,7 +4,7 @@ import Foundation
 ///
 /// The generated profiles can be imported into Jamf Pro, Microsoft Intune, Mosyle, Kandji,
 /// or any other MDM solution that supports Apple Configuration Profiles.
-public struct MobileConfigGenerator {
+public enum MobileConfigGenerator {
 
     // MARK: - Public
 

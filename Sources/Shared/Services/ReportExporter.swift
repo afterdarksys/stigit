@@ -1,7 +1,7 @@
 import Foundation
 
 /// Generates compliance scan reports in multiple formats for audit trail and regulatory submission.
-public struct ReportExporter {
+public enum ReportExporter {
 
     public enum Format {
         case json

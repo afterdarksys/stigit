@@ -14,7 +14,7 @@ import Yams
 /// - Deploy updated rule sets without recompiling the app
 /// - Add custom organisational rules alongside the Apple STIG reference
 /// - Pin rule sets to specific versions of the macos_security project
-public struct YAMLRuleLoader {
+public enum YAMLRuleLoader {
 
     // MARK: - Public
 
