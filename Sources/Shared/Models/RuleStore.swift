@@ -31,13 +31,16 @@ public class RuleStore {
     // MARK: - Default rule library (assembled from category extensions)
 
     public static func defaultRules() -> [Rule] {
-        accessControlRules()
-        + authenticationRules()
-        + networkSecurityRules()
-        + auditingRules()
-        + dataProtectionRules()
-        + passwordPolicyRules()
-        + mediaControlRules()
-        + miscRules()
+        var rules: [Rule] = []
+        rules += accessControlRules()
+        rules += authenticationRules()
+        rules += networkSecurityRules()
+        rules += auditingRules()
+        rules += dataProtectionRules()
+        rules += passwordPolicyRules()
+        rules += mediaControlRules()
+        rules += miscRules()
+        rules += financialHealthcareRules()
+        return rules
     }
 }

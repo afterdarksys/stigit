@@ -12,6 +12,9 @@ public enum ComplianceProfile: String, Codable, CaseIterable, Sendable, Identifi
     case cisL2    = "CIS Level 2"
     case cnssi    = "CNSSI-1253"
     case nist171  = "NIST 800-171"
+    case sox      = "SOX"
+    case hipaa    = "HIPAA"
+    case glba     = "GLBA"
     case other    = "Other / OS Tweaks"
 
     public var id: String { rawValue }
