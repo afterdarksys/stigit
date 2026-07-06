@@ -20,9 +20,9 @@ struct StandardWorkflowView: View {
     }
 
     var body: some View {
-        NavigationSplitView {
+        HSplitView {
             CategorySidebarView(profile: profile, selection: $selectedCategory)
-        } detail: {
+                .frame(minWidth: 200, idealWidth: 230, maxWidth: 320)
             VStack(spacing: 0) {
                 SeverityFilterBar(selection: $severityFilter)
                 Divider()
@@ -30,9 +30,10 @@ struct StandardWorkflowView: View {
                 Divider()
                 actionBar
             }
-            .navigationTitle(navigationTitle)
-            .toolbar { toolbarContent }
+            .frame(maxWidth: .infinity)
         }
+        .navigationTitle(navigationTitle)
+        .toolbar { toolbarContent }
         .sheet(isPresented: $showingStaging) {
             StagingModalView(profile: profile).frame(minWidth: 600, minHeight: 400)
         }
@@ -143,7 +144,7 @@ struct StandardWorkflowView: View {
             _ = await RemediationService.submit(rules: toApply)
             var snapshot = store.rules
             await ScannerService.scan(rules: &snapshot, profile: profile) { done, total in
-                store.scanProgress = Double(done) / Double(total)
+                Task { @MainActor in store.scanProgress = Double(done) / Double(total) }
             }
             store.rules = snapshot
             store.isScanning = false

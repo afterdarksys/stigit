@@ -1,8 +1,10 @@
 import SwiftUI
+import Charts
 import StigItCore
 
 struct DashboardView: View {
     @Environment(RuleStore.self) var store
+    @State private var history: [ScanReport] = []
 
     var body: some View {
         ScrollView {
@@ -53,6 +55,11 @@ struct DashboardView: View {
                     severityBreakdown
                 }
 
+                // Compliance over time (from ~/.stigit/history/, shared with the CLI)
+                if history.count >= 2 {
+                    scoreTrend
+                }
+
                 // Scan button + progress
                 VStack(spacing: 10) {
                     Button {
@@ -61,11 +68,12 @@ struct DashboardView: View {
                             store.scanProgress = 0
                             var snapshot = store.rules
                             await ScannerService.scan(rules: &snapshot, profile: store.activeProfile) { done, total in
-                                store.scanProgress = Double(done) / Double(total)
+                                Task { @MainActor in store.scanProgress = Double(done) / Double(total) }
                             }
                             store.rules = snapshot
                             store.lastScanDate = Date()
                             store.isScanning = false
+                            saveScanToHistory(rules: snapshot)
                         }
                     } label: {
                         Label("Run Full Scan", systemImage: "magnifyingglass.circle.fill")
@@ -94,6 +102,47 @@ struct DashboardView: View {
             .padding(40)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .onAppear(perform: reloadHistory)
+        .onChange(of: store.activeProfile) { reloadHistory() }
+    }
+
+    // MARK: - History
+
+    private func reloadHistory() {
+        history = ScanHistoryService.allSnapshots(profileKey: store.activeProfile.key)
+    }
+
+    private func saveScanToHistory(rules: [Rule]) {
+        let report = ScanReport(
+            rules: rules,
+            profile: store.activeProfile,
+            waivers: try? WaiverStore.load()
+        )
+        _ = try? ScanHistoryService.save(report)
+        reloadHistory()
+    }
+
+    private var scoreTrend: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Compliance Over Time").font(.headline)
+            Chart(history, id: \.generatedAt) { snapshot in
+                LineMark(
+                    x: .value("Date", snapshot.generatedAt),
+                    y: .value("Score", snapshot.summary.score * 100)
+                )
+                .interpolationMethod(.monotone)
+                PointMark(
+                    x: .value("Date", snapshot.generatedAt),
+                    y: .value("Score", snapshot.summary.score * 100)
+                )
+            }
+            .chartYScale(domain: 0...100)
+            .frame(height: 160)
+        }
+        .padding(20)
+        .background(RoundedRectangle(cornerRadius: 12).fill(Color(nsColor: .windowBackgroundColor)))
+        .shadow(color: .black.opacity(0.06), radius: 6)
+        .padding(.horizontal)
     }
 
     // MARK: - Subviews

@@ -19,6 +19,31 @@ public enum ComplianceProfile: String, Codable, CaseIterable, Sendable, Identifi
 
     public var id: String { rawValue }
 
+    /// Short machine key used by the CLI, report schemas, and history filenames.
+    public var key: String {
+        switch self {
+        case .stig:     return "stig"
+        case .nist:     return "nist"
+        case .soc2:     return "soc2"
+        case .iso27001: return "iso27001"
+        case .gdpr:     return "gdpr"
+        case .cmmc1:    return "cmmc1"
+        case .cmmc2:    return "cmmc2"
+        case .cisL1:    return "cis1"
+        case .cisL2:    return "cis2"
+        case .cnssi:    return "cnssi"
+        case .nist171:  return "nist171"
+        case .sox:      return "sox"
+        case .hipaa:    return "hipaa"
+        case .glba:     return "glba"
+        case .other:    return "other"
+        }
+    }
+
+    public static func from(key: String) -> ComplianceProfile? {
+        allCases.first { $0.key == key.lowercased() }
+    }
+
     /// Maps the YAML tag strings from the macos_security project to profiles
     public static func from(tag: String) -> ComplianceProfile? {
         switch tag {

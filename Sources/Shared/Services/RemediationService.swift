@@ -10,6 +10,31 @@ public enum RemediationService {
             .joined(separator: "\n")
     }
 
+    /// Whether the process already has root and can remediate without a GUI prompt.
+    public static var canRunNonInteractively: Bool { geteuid() == 0 }
+
+    /// Headless remediation for automation (MDM scripts, launchd, CI). Requires the
+    /// process to already be root — it never prompts, and fails closed otherwise.
+    /// Returns `true` when the combined script exits 0.
+    public static func executeDirect(rules: [Rule]) async -> Bool {
+        guard canRunNonInteractively else { return false }
+        let script = stagingScript(for: rules)
+        guard !script.isEmpty else { return true }
+
+        return await withCheckedContinuation { continuation in
+            let process = Process()
+            process.executableURL = URL(fileURLWithPath: "/bin/sh")
+            process.arguments = ["-c", script]
+            process.standardOutput = Pipe()
+            process.standardError = Pipe()
+            process.terminationHandler = { p in
+                continuation.resume(returning: p.terminationStatus == 0)
+            }
+            do    { try process.run() }
+            catch { continuation.resume(returning: false) }
+        }
+    }
+
     /// Runs the staged remediations via an AppleScript administrator-privilege prompt.
     /// Returns `true` when the script exits 0, `false` if cancelled or failed.
     public static func submit(rules: [Rule]) async -> Bool {

@@ -100,26 +100,29 @@ StigIt/
 ├── Sources/
 │   ├── Shared/                  # StigItCore library
 │   │   ├── Models/
-│   │   │   ├── Rule.swift       # Rule model, enums (severity, profiles, categories, result types)
-│   │   │   └── RuleStore.swift  # Observable store, 60+ default rules
+│   │   │   ├── Rule.swift          # Rule model, enums (severity, profiles, categories)
+│   │   │   ├── RuleStore.swift     # Observable store, 60+ default rules
+│   │   │   ├── ScanReport.swift    # Canonical schema-versioned scan result
+│   │   │   ├── Waiver.swift        # Documented exceptions (approver, reason, expiry)
+│   │   │   └── EndpointInfo.swift  # Host identity (hostname, serial, OS) via IOKit/sysctl
 │   │   └── Services/
 │   │       ├── ScannerService.swift         # Parallel scan via TaskGroup
-│   │       ├── RemediationService.swift     # Executes fixes via AppleScript (admin priv)
-│   │       ├── ReportExporter.swift         # JSON / CSV / summary report generation
+│   │       ├── RemediationService.swift     # AppleScript prompt or direct root execution
+│   │       ├── ReportExporter.swift         # JSON / CSV / summary / NDJSON / JUnit
+│   │       ├── ScanHistoryService.swift     # Scan snapshots + drift detection
+│   │       ├── FleetService.swift           # Endpoint report publish + fleet roll-up
+│   │       ├── LaunchdScheduler.swift       # Recurring scans via LaunchDaemon/Agent
 │   │       ├── MobileConfigGenerator.swift  # Apple .mobileconfig XML for MDM
 │   │       ├── YAMLRuleLoader.swift         # Runtime YAML rule ingestion (Yams)
 │   │       └── BackupRestoreService.swift   # Pre-remediation snapshots + restore
-│   ├── StigIt/                  # SwiftUI macOS app
-│   │   └── Views/
-│   │       ├── ContentView.swift
-│   │       ├── DashboardView.swift
-│   │       ├── StandardWorkflowView.swift
-│   │       ├── StagingView.swift
-│   │       ├── StagingModalView.swift
-│   │       ├── RulesView.swift
-│   │       └── BackupsView.swift
-│   └── StigItCLI/               # Headless CLI
-│       └── StigItCLI.swift
+│   ├── StigIt/                  # SwiftUI macOS management console
+│   │   └── Views/               # Sidebar shell, dashboard with trends, per-profile
+│   │                            # workflow, FleetView, WaiversView, BackupsView
+│   └── StigItCLI/               # Automation-grade CLI
+│       ├── StigItCLI.swift          # Subcommand dispatch + legacy flag shim
+│       ├── CLISupport.swift         # Arg parsing, exit codes, scan pipeline
+│       ├── ScanCommands.swift       # scan / remediate
+│       └── ManagementCommands.swift # waiver / fleet / schedule / mobileconfig / rules
 └── reference/
     └── macos_security/          # Apple/NIST rule reference (git submodule)
         └── rules/               # 280+ YAML rule definitions
@@ -141,77 +144,118 @@ swift build
 swift build -c release
 
 # Run the CLI directly
-swift run stigit-cli --profile stig
+swift run stigit-cli scan --profile stig
 ```
 
 ---
 
-## macOS App
+## macOS Management Console
 
-The SwiftUI app provides a tab-per-profile workspace with:
+The SwiftUI app is a sidebar-based console for ops teams:
 
-- **Dashboard** — compliance score gauge, severity breakdown chart (high/medium/low pass rates), profile picker, one-click full scan with live progress bar, last scan timestamp
-- **Category sidebar** — rules grouped by category with red badge counts for non-compliant rules
-- **Rule list** — each rule shows its compliance status, color-coded severity badge (HIGH / MEDIUM / LOW), STIG ID, CCE ID, NIST control references, and MDM-deployable indicator
-- **Severity filter chips** — filter the rule list to High / Medium / Low within any category
-- **Staging** — review the shell commands that will be executed before committing to remediation
-- **Apply Now** — submits remediation commands via AppleScript administrator privileges prompt
-- **Export menu** — export JSON, CSV, or plain-text summary reports; generate a `.mobileconfig` profile directly from the toolbar
+- **Dashboard** — compliance score, severity breakdown, one-click full scan, and a compliance-over-time chart fed by the scan history shared with the CLI
+- **Per-profile workflow** (This Mac) — category browser with failure badges, severity filter chips, per-rule STIG/CCE/NIST metadata, staged remediation review, and AppleScript-prompted Apply Now
+- **Fleet** — point it at the directory endpoints publish reports into (`stigit-cli scan --fleet-dir …`) and get per-endpoint scores, high-severity failure counts, stale-endpoint flagging, and drill-down into any machine's open findings
+- **Waivers** — create, review, and revoke documented exceptions (approver, reason, ticket, expiry); expired waivers are highlighted and automatically become findings again
 - **Backups** — create named pre-remediation snapshots to `~/.stigit/backups/`, list and restore existing backups
+- **Export menu** — JSON, CSV, or summary reports and `.mobileconfig` generation from the toolbar
 
 ---
 
 ## CLI
 
+The CLI is built for automation: subcommands, deterministic exit codes, machine-readable
+output on stdout, diagnostics on stderr.
+
 ```
-USAGE: stigit-cli [OPTIONS]
+USAGE: stigit-cli <command> [options]
 
-SCAN OPTIONS:
-  --profile <name>      Compliance profile (default: stig)
-                        stig | nist | soc2 | iso27001 | gdpr |
-                        cmmc1 | cmmc2 | cis1 | cis2 | cnssi | nist171 | other
-  --severity <level>    Filter to rules of a single severity: high | medium | low
-  --rules-dir <path>    Load additional rules from a YAML rules directory
-                        (e.g. /path/to/macos_security/rules)
+COMMANDS:
+  scan          Scan this machine against a compliance profile
+  remediate     Scan, then apply fixes for unwaived failing rules
+  waiver        Manage documented exceptions (list | add | remove)
+  fleet         Aggregate endpoint reports (summarize <dir>)
+  schedule      Manage the recurring launchd scan (install | uninstall | status)
+  mobileconfig  Generate an MDM .mobileconfig profile
+  rules         List the rule library (rules list)
 
-REMEDIATION OPTIONS:
-  --remediate           Apply fixes for all failing rules (triggers macOS auth prompt)
-  --backup              Snapshot system config to ~/.stigit/backups/ before remediating
+SCAN / REMEDIATE OPTIONS:
+  --profile <key>       stig | nist | nist171 | cmmc1 | cmmc2 | cis1 | cis2 |
+                        cnssi | soc2 | iso27001 | gdpr | sox | hipaa | glba | other
+  --severity <level>    high | medium | low
+  --rules-dir <path>    Load extra YAML rules (macos_security schema)
+  --waivers <file>      Waiver file (default: ~/.stigit/waivers.json)
+  --format <fmt>        text | json | ndjson | junit    (stdout format)
+  --quiet, -q           Suppress per-rule output and progress
+  --export <fmt>        Also write a report file: json | csv | summary | ndjson | junit
+  --output <dir>        Report directory (default: ~/.stigit/reports/)
+  --fleet-dir <dir>     Publish this endpoint's report into a fleet drop directory
+  --history             Save this scan to ~/.stigit/history/
+  --compare             Include drift vs. the previous saved scan
+  --fail-on <level>     Exit 1 on unwaived findings at/above:
+                        high (default) | medium | low | any | none
 
-EXPORT OPTIONS:
-  --export <format>     Write a report: json | csv | summary
-  --output <path>       Output directory (default: ~/.stigit/reports/)
+REMEDIATE-ONLY OPTIONS:
+  --dry-run             Print the staged remediation script without executing
+  --backup              Snapshot system config first
+  --non-interactive     No GUI prompt; requires root (sudo / MDM)
 
-MDM OPTIONS:
-  --generate-mobileconfig          Generate a .mobileconfig profile
-  --org-name <name>                Organisation name in the profile metadata
-  --profile-identifier <id>        Reverse-DNS identifier (default: com.stigit.baseline)
+EXIT CODES:
+  0  compliant (or findings below --fail-on)
+  1  unwaived findings at/above --fail-on
+  2  usage or runtime error
 ```
+
+Legacy flat-flag invocations (`stigit-cli --profile stig --remediate`) still work.
 
 ### Examples
 
 ```bash
-# Scan against DISA STIG and print results
-stigit-cli --profile stig
+# CI gate: fail the job on any unwaived high-severity finding
+stigit-cli scan --profile stig --format junit --fail-on high > results.xml
 
-# Scan only high-severity CMMC Level 2 rules
-stigit-cli --profile cmmc2 --severity high
+# Nightly MDM script: scan, record history, publish to the fleet share
+sudo stigit-cli scan --profile cis1 --quiet --history \
+  --fleet-dir /Volumes/Compliance/fleet
 
-# Export a JSON report
-stigit-cli --profile nist --export json
+# Auto-remediate headlessly (MDM / SSH), with a backup first
+sudo stigit-cli remediate --profile stig --backup --non-interactive
 
-# Scan, backup, then auto-remediate
-stigit-cli --profile stig --backup --remediate
+# Record an approved exception with an expiry
+stigit-cli waiver add os_ssh_root_login \
+  --reason "break-glass account required by DR runbook" \
+  --approved-by "J. Doe" --ticket SEC-142 --expires 2026-12-31
 
-# Generate an MDM configuration profile
-stigit-cli --profile stig --generate-mobileconfig \
-  --org-name "Acme Corp" \
-  --profile-identifier "com.acme.stig-baseline"
+# What changed since the last recorded scan?
+stigit-cli scan --profile stig --history --compare
+
+# Ops roll-up across every Mac publishing into the share
+stigit-cli fleet summarize /Volumes/Compliance/fleet --format csv
+
+# Install a daily scheduled scan (LaunchDaemon when run as root)
+sudo stigit-cli schedule install --interval daily --profile stig \
+  --fleet-dir /Volumes/Compliance/fleet
 
 # Load all 280+ rules from the macos_security reference
-stigit-cli --profile stig \
-  --rules-dir ./reference/macos_security/rules
+stigit-cli scan --profile stig --rules-dir ./reference/macos_security/rules
 ```
+
+### Waivers
+
+A waiver is a documented, time-boxed exception: rule ID, reason, approver, optional
+ticket, optional expiry. Waived rules stay visible in every report (marked `waived`)
+but do not count against `--fail-on` gating or remediation. Expired waivers turn back
+into findings and are flagged on scan. The waiver file (`~/.stigit/waivers.json`) is
+shared between the CLI and the app's Waivers view, and can be checked into config
+management and distributed with `--waivers`.
+
+### Fleet reporting without a server
+
+`scan --fleet-dir <dir>` writes the endpoint's full report as `<hostname>.json`
+(atomic overwrite, one file per host) into a directory you sync however you already
+move files — MDM script, scp, NFS/SMB share, S3 sync. `fleet summarize <dir>` and the
+app's Fleet view aggregate it: per-endpoint score, high-severity failures, waived
+counts, and stale endpoints that have stopped reporting (`--stale-days`, default 7).
 
 ---
 
@@ -248,8 +292,7 @@ Tested with:
 - Kandji
 
 ```bash
-stigit-cli --profile stig \
-  --generate-mobileconfig \
+stigit-cli mobileconfig --profile stig \
   --org-name "Department of Example" \
   --profile-identifier "gov.example.stig-macos"
 ```
@@ -279,14 +322,29 @@ Backups are stored in `~/.stigit/backups/<name>/` with a `manifest.json` recordi
 
 ## Compliance Report Output
 
+All formats are rendered from the same schema-versioned `ScanReport`, stamped with the
+endpoint's hostname, serial number, and OS version.
+
 ### JSON
-Full machine-readable report with per-rule status, STIG IDs, CCE IDs, CCI IDs, NIST controls, severity, and MDM flag. Suitable for ingestion into SIEM systems or compliance dashboards.
+Full machine-readable report: summary counts, per-rule outcome (including `waived`),
+STIG/CCE/NIST metadata, applied waivers, and drift when `--compare` is used. Stable
+`schemaVersion` field for downstream consumers.
+
+### JUnit XML
+One test case per rule — failures are unwaived findings, waived/unevaluated rules are
+skips. Drop it into Jenkins, GitLab CI, GitHub Actions, or any test-report ingester.
+
+### NDJSON
+One JSON object per rule result with endpoint identity inlined, ready for log shippers
+and SIEM pipelines (Splunk, Elastic, Datadog).
 
 ### CSV
-Tabular format for import into Excel, Numbers, or compliance tracking spreadsheets.
+Tabular format (now with outcome and waiver columns) for Excel, Numbers, or compliance
+tracking spreadsheets.
 
 ### Summary
-Plain-text executive summary showing overall score, findings grouped by severity, and passing controls. Designed for email or ticketing system attachments.
+Plain-text executive summary: score, drift, findings by severity, waived findings with
+approver and expiry, passing controls. Designed for email or ticketing attachments.
 
 Reports are written to `~/.stigit/reports/` with ISO 8601 timestamps in the filename.
 

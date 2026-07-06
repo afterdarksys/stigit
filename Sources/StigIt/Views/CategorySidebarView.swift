@@ -16,9 +16,7 @@ struct CategorySidebarView: View {
             List(selection: $selection) {
                 ForEach(categories) { category in
                     HStack {
-                        NavigationLink(value: category) {
-                            Label(category.rawValue, systemImage: category.systemImage)
-                        }
+                        Label(category.rawValue, systemImage: category.systemImage)
                         Spacer()
                         let failing = store.rules.filter {
                             $0.profiles.contains(profile) && $0.category == category && $0.status == .nonCompliant
@@ -31,9 +29,9 @@ struct CategorySidebarView: View {
                                 .background(Capsule().fill(Color.red))
                         }
                     }
+                    .tag(category)
                 }
             }
-            .navigationTitle("Categories")
 
             Divider()
             complianceSummary
