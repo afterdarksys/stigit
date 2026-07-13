@@ -37,7 +37,7 @@ struct StandardWorkflowView: View {
         .sheet(isPresented: $showingStaging) {
             StagingModalView(profile: profile).frame(minWidth: 600, minHeight: 400)
         }
-        .alert("Export Error", isPresented: Binding(
+        .alert("Operation Error", isPresented: Binding(
             get: { exportError != nil },
             set: { if !$0 { exportError = nil } }
         )) {
@@ -140,8 +140,26 @@ struct StandardWorkflowView: View {
     private func applyRemediation() {
         Task {
             store.isScanning = true
-            let toApply = store.rules.filter { $0.profiles.contains(profile) && $0.isSelectedForRemediation && $0.status == .nonCompliant }
-            _ = await RemediationService.submit(rules: toApply)
+            let waivers: WaiverStore
+            do {
+                waivers = try WaiverStore.load()
+            } catch {
+                exportError = "Waivers could not be loaded, so remediation was cancelled: \(error.localizedDescription)"
+                store.isScanning = false
+                return
+            }
+            let profileRules = store.rules.filter { $0.profiles.contains(profile) }
+            let toApply = RemediationService.eligibleRules(from: profileRules, waivers: waivers)
+            guard !toApply.isEmpty else {
+                store.isScanning = false
+                return
+            }
+            let submitted = await RemediationService.submit(rules: toApply)
+            guard submitted else {
+                exportError = "Remediation failed or was cancelled. No success was assumed."
+                store.isScanning = false
+                return
+            }
             var snapshot = store.rules
             await ScannerService.scan(rules: &snapshot, profile: profile) { done, total in
                 Task { @MainActor in store.scanProgress = Double(done) / Double(total) }

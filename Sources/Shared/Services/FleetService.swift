@@ -115,9 +115,20 @@ public enum FleetService {
                 String(e.waived),
                 dateFormatter.string(from: e.reportDate),
                 e.isStale ? "yes" : "no",
-            ].joined(separator: ","))
+            ].map(csvEscape).joined(separator: ","))
         }
         return lines.joined(separator: "\n")
+    }
+
+    private static func csvEscape(_ rawValue: String) -> String {
+        var value = rawValue
+        if let first = value.first, "=+-@\t\r".contains(first) {
+            value = "'" + value
+        }
+        if value.contains(",") || value.contains("\"") || value.contains("\n") {
+            return "\"" + value.replacingOccurrences(of: "\"", with: "\"\"") + "\""
+        }
+        return value
     }
 
     public static func renderText(_ summary: FleetSummary) -> String {

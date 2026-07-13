@@ -264,7 +264,11 @@ enum RulesCommand {
         }
         guard let options = ScanOptions.parse(args) else { return ExitCode.error }
 
-        let rules = CLIPipeline.loadRules(rulesDir: options.rulesDir, quiet: true)
+        let loadedRules = CLIPipeline.loadRules(
+            rulesDir: options.rulesDir, quiet: true, profile: options.profile
+        )
+        guard !loadedRules.isEmpty else { return ExitCode.error }
+        let rules = loadedRules
             .filter {
                 $0.profiles.contains(options.profile)
                     && (options.severity == nil || $0.severity == options.severity)

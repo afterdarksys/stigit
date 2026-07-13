@@ -15,7 +15,8 @@ extension RuleStore {
             nistControls: ["AC-11(1)"],
             checkCommand: "defaults read com.apple.screensaver askForPassword 2>/dev/null || echo '0'",
             expectedResult: .string("1"),
-            remediateCommand: "defaults write com.apple.screensaver askForPassword -int 1"
+            remediateCommand: "defaults write com.apple.screensaver askForPassword -int 1",
+            executionContext: .consoleUser
         ),
         Rule(
             id: "system_settings_screensaver_timeout_enforce",
@@ -39,7 +40,8 @@ extension RuleStore {
                 [ "$val" -le 900 ] 2>/dev/null && echo "pass" || echo "fail"
                 """,
             expectedResult: .string("pass"),
-            remediateCommand: "defaults -currentHost write com.apple.screensaver idleTime -int 900"
+            remediateCommand: "defaults -currentHost write com.apple.screensaver idleTime -int 900",
+            executionContext: .consoleUser
         ),
         Rule(
             id: "system_settings_guest_account_disable",

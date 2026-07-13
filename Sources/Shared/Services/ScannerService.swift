@@ -5,12 +5,23 @@ public enum ScannerService {
     // MARK: - Single rule
 
     public static func check(rule: Rule) async -> RuleStatus {
-        let raw = await runShellCommand(rule.checkCommand)
-        let output = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard let command = ExecutionContextService.command(
+            for: rule,
+            command: rule.checkCommand,
+            runningAsRoot: geteuid() == 0,
+            consoleUsername: ExecutionContextService.currentConsoleUsername()
+        ) else { return .error }
+        let result = await runShellCommand(command)
+        // Exit 1 is commonly produced by grep when a tested setting is absent; in
+        // that case its numeric/string output is still the rule result. Shell and
+        // process failures use exit codes greater than 1 and must fail closed.
+        guard result.status == 0 || result.status == 1 else { return .error }
+        let output = result.stdout.trimmingCharacters(in: .whitespacesAndNewlines)
 
         switch rule.expectedResult {
         case .string(let expected):
-            return output.contains(expected) ? .compliant : .nonCompliant
+            return output == expected.trimmingCharacters(in: .whitespacesAndNewlines)
+                ? .compliant : .nonCompliant
         case .integer(let expected):
             return intResult(from: output, expected: expected)
         }
@@ -63,20 +74,36 @@ public enum ScannerService {
 
     // MARK: - Private
 
-    private static func runShellCommand(_ command: String) async -> String {
+    private struct ShellResult: Sendable {
+        let stdout: String
+        let stderr: String
+        let status: Int32
+    }
+
+    private static func runShellCommand(_ command: String) async -> ShellResult {
         await withCheckedContinuation { continuation in
             let process = Process()
-            let pipe    = Pipe()
-            process.standardOutput = pipe
-            process.standardError  = pipe
-            process.launchPath     = "/bin/sh"
+            let stdout = Pipe()
+            let stderr = Pipe()
+            process.standardOutput = stdout
+            process.standardError  = stderr
+            process.executableURL  = URL(fileURLWithPath: "/bin/sh")
             process.arguments      = ["-c", command]
-            process.terminationHandler = { _ in
-                let data = pipe.fileHandleForReading.readDataToEndOfFile()
-                continuation.resume(returning: String(data: data, encoding: .utf8) ?? "")
+            process.terminationHandler = { process in
+                let outputData = stdout.fileHandleForReading.readDataToEndOfFile()
+                let errorData = stderr.fileHandleForReading.readDataToEndOfFile()
+                continuation.resume(returning: ShellResult(
+                    stdout: String(data: outputData, encoding: .utf8) ?? "",
+                    stderr: String(data: errorData, encoding: .utf8) ?? "",
+                    status: process.terminationStatus
+                ))
             }
             do    { try process.run() }
-            catch { continuation.resume(returning: "") }
+            catch {
+                continuation.resume(returning: ShellResult(
+                    stdout: "", stderr: error.localizedDescription, status: 127
+                ))
+            }
         }
     }
 

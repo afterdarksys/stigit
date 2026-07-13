@@ -36,7 +36,8 @@ extension RuleStore {
             nistControls: ["SC-28", "AC-3"],
             checkCommand: "defaults read com.apple.Terminal SecureKeyboardEntry 2>/dev/null || echo '0'",
             expectedResult: .integer(1),
-            remediateCommand: "defaults write com.apple.Terminal SecureKeyboardEntry -bool true"
+            remediateCommand: "defaults write com.apple.Terminal SecureKeyboardEntry -bool true",
+            executionContext: .consoleUser
         ),
         Rule(
             id: "os_icloud_drive_disable",

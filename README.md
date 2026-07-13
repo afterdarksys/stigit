@@ -2,6 +2,27 @@
 
 A macOS security compliance scanner and remediation tool for enterprises, government agencies, and high-security environments. StigIt audits a macOS endpoint against industry security frameworks, generates audit-ready compliance reports, and applies remediations — either interactively via a native macOS app or headlessly via a CLI suitable for deployment pipelines and MDM workflows.
 
+## Why StigIt Exists
+
+StigIt grew out of a government-contract environment where the standard endpoint
+security workflow was designed around managed Windows machines, while a macOS
+endpoint was required as an accessibility accommodation. The Mac still needed a
+repeatable way to apply equivalent controls, expose failures, document exceptions,
+and produce evidence that security and compliance teams could review.
+
+StigIt is intended to close that operational gap. It combines macOS-focused checks,
+framework metadata, deterministic automation, controlled remediation, waivers,
+backups, and fleet reporting without requiring an organization to replace its MDM
+or existing evidence pipeline.
+
+### Compliance trust boundary
+
+StigIt supports compliance assessment and evidence collection; it does not itself
+certify an endpoint or organization as compliant. Strict environments should pair
+it with version-matched, independently validated baselines, controlled rule
+provenance, signed and notarized releases, MDM acceptance testing, change approval,
+and the organization's normal authorization and risk-management process.
+
 ---
 
 ## Supported Compliance Frameworks
@@ -145,6 +166,9 @@ swift build -c release
 
 # Run the CLI directly
 swift run stigit-cli scan --profile stig
+
+# Run the regression suite
+swift test
 ```
 
 ---
@@ -183,7 +207,8 @@ SCAN / REMEDIATE OPTIONS:
   --profile <key>       stig | nist | nist171 | cmmc1 | cmmc2 | cis1 | cis2 |
                         cnssi | soc2 | iso27001 | gdpr | sox | hipaa | glba | other
   --severity <level>    high | medium | low
-  --rules-dir <path>    Load extra YAML rules (macos_security schema)
+  --rules-dir <path>    Load YAML rules (macos_security schema); matching IDs replace
+                        bundled rules
   --waivers <file>      Waiver file (default: ~/.stigit/waivers.json)
   --format <fmt>        text | json | ndjson | junit    (stdout format)
   --quiet, -q           Suppress per-rule output and progress
@@ -236,9 +261,26 @@ stigit-cli fleet summarize /Volumes/Compliance/fleet --format csv
 sudo stigit-cli schedule install --interval daily --profile stig \
   --fleet-dir /Volumes/Compliance/fleet
 
-# Load all 280+ rules from the macos_security reference
+# Load rules from a macos_security checkout matching this Mac's major OS version
 stigit-cli scan --profile stig --rules-dir ./reference/macos_security/rules
 ```
+
+YAML ingestion is intentionally fail-closed: an invalid directory, malformed rule,
+empty compatible rule set, or rule whose `macOS` applicability excludes the current
+major version stops the command instead of silently falling back. For STIG scans,
+`odv.stig` values take precedence; other profiles use `odv.recommended` when present.
+
+### Root and MDM execution
+
+System rules execute as root during non-interactive remediation. Rules that inspect
+or change per-user preferences are marked `console_user`; when StigIt itself runs as
+root, those commands are executed through the currently logged-in console user. If
+there is no safe console user, the rule fails closed instead of reading or writing
+root's preferences. Multi-rule remediation scripts also stop at the first failure.
+
+Backups use a structured manifest with exact source paths, validate backup names,
+and only report success after every copy succeeds. Restores are restricted to known
+system paths under the configured backup root.
 
 ### Waivers
 

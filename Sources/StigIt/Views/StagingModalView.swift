@@ -8,9 +8,14 @@ struct StagingModalView: View {
     let profile: ComplianceProfile
     @State private var isSubmitting = false
     @State private var submissionResult: Bool? = nil
+    @State private var waiverStore = WaiverStore(waivers: [])
+    @State private var waiversLoaded = false
+    @State private var waiverLoadError: String?
     
     var activeRemediations: [Rule] {
-        store.rules.filter { $0.profiles.contains(profile) && $0.isSelectedForRemediation && $0.status != .compliant }
+        guard waiversLoaded else { return [] }
+        let profileRules = store.rules.filter { $0.profiles.contains(profile) }
+        return RemediationService.eligibleRules(from: profileRules, waivers: waiverStore)
     }
     
     var body: some View {
@@ -29,6 +34,11 @@ struct StagingModalView: View {
                 }
                 .buttonStyle(.borderedProminent)
             } else {
+                if let waiverLoadError {
+                    Text("Waivers could not be loaded. Remediation is disabled: \(waiverLoadError)")
+                        .foregroundColor(.red)
+                }
+
                 Text("The following policy changes will be enforced:")
                     .font(.headline)
                     
@@ -89,5 +99,14 @@ struct StagingModalView: View {
             }
         }
         .padding()
+        .onAppear {
+            do {
+                waiverStore = try WaiverStore.load()
+                waiversLoaded = true
+            } catch {
+                waiverLoadError = error.localizedDescription
+                waiversLoaded = false
+            }
+        }
     }
 }

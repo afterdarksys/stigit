@@ -104,6 +104,11 @@ public enum RuleStatus: String, Codable, CaseIterable, Sendable {
     case error        = "Error"
 }
 
+public enum RuleExecutionContext: String, Codable, Sendable {
+    case system
+    case consoleUser = "console_user"
+}
+
 public struct Rule: Identifiable, Codable, Hashable, Sendable {
     // Identity
     public let id: String
@@ -125,6 +130,7 @@ public struct Rule: Identifiable, Codable, Hashable, Sendable {
     public let checkCommand: String
     public let expectedResult: ExpectedResult
     public let remediateCommand: String
+    public let executionContext: RuleExecutionContext
 
     // MDM support
     public let mobileconfig: Bool
@@ -148,6 +154,7 @@ public struct Rule: Identifiable, Codable, Hashable, Sendable {
         checkCommand: String,
         expectedResult: ExpectedResult,
         remediateCommand: String,
+        executionContext: RuleExecutionContext = .system,
         mobileconfig: Bool = false,
         status: RuleStatus = .unknown,
         isSelectedForRemediation: Bool = true
@@ -165,6 +172,7 @@ public struct Rule: Identifiable, Codable, Hashable, Sendable {
         self.checkCommand = checkCommand
         self.expectedResult = expectedResult
         self.remediateCommand = remediateCommand
+        self.executionContext = executionContext
         self.mobileconfig = mobileconfig
         self.status = status
         self.isSelectedForRemediation = isSelectedForRemediation

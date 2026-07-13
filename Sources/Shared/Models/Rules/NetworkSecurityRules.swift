@@ -30,7 +30,8 @@ extension RuleStore {
             nistControls: ["CM-7", "AC-4"],
             checkCommand: "defaults read com.apple.NetworkBrowser DisableAirDrop 2>/dev/null || echo '0'",
             expectedResult: .string("1"),
-            remediateCommand: "defaults write com.apple.NetworkBrowser DisableAirDrop -bool true"
+            remediateCommand: "defaults write com.apple.NetworkBrowser DisableAirDrop -bool true",
+            executionContext: .consoleUser
         ),
         Rule(
             id: "system_settings_firewall_enable",
@@ -184,7 +185,8 @@ extension RuleStore {
             nistControls: ["CM-7"],
             checkCommand: "defaults -currentHost read com.apple.Bluetooth PrefKeyServicesEnabled 2>/dev/null || echo '0'",
             expectedResult: .string("0"),
-            remediateCommand: "defaults -currentHost write com.apple.Bluetooth PrefKeyServicesEnabled -bool false"
+            remediateCommand: "defaults -currentHost write com.apple.Bluetooth PrefKeyServicesEnabled -bool false",
+            executionContext: .consoleUser
         ),
     ] }
 }

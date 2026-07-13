@@ -28,5 +28,10 @@ let package = Package(
             dependencies: ["StigItCore"],
             path: "Sources/StigItCLI"
         ),
+        .testTarget(
+            name: "StigItCoreTests",
+            dependencies: ["StigItCore", "StigItCLI"],
+            path: "Tests/StigItCoreTests"
+        ),
     ]
 )

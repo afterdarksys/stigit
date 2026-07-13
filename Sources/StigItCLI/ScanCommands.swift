@@ -16,7 +16,10 @@ enum ScanCommand {
         }
         warnAboutExpired(waivers, options: options)
 
-        var rules = CLIPipeline.loadRules(rulesDir: options.rulesDir, quiet: options.quiet)
+        var rules = CLIPipeline.loadRules(
+            rulesDir: options.rulesDir, quiet: options.quiet, profile: options.profile
+        )
+        guard !rules.isEmpty else { return ExitCode.error }
         let scanned = await CLIPipeline.scan(rules: &rules, options: options)
         guard !scanned.isEmpty else {
             Console.error("No rules match profile '\(options.profile.key)'"
@@ -58,13 +61,12 @@ enum RemediateCommand {
             return ExitCode.error
         }
 
-        var rules = CLIPipeline.loadRules(rulesDir: options.rulesDir, quiet: options.quiet)
+        var rules = CLIPipeline.loadRules(
+            rulesDir: options.rulesDir, quiet: options.quiet, profile: options.profile
+        )
+        guard !rules.isEmpty else { return ExitCode.error }
         let scanned = await CLIPipeline.scan(rules: &rules, options: options)
-        let before = ScanReport(rules: scanned, profile: options.profile, waivers: waivers)
-
-        // Waived findings are accepted exceptions — never remediate them.
-        let waivedIDs = Set(before.results.filter { $0.outcome == .waived }.map(\.id))
-        let failing = scanned.filter { $0.status == .nonCompliant && !waivedIDs.contains($0.id) }
+        let failing = RemediationService.eligibleRules(from: scanned, waivers: waivers)
 
         guard !failing.isEmpty else {
             Console.error("Nothing to remediate — no unwaived failing rules.")

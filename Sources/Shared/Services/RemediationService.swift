@@ -2,12 +2,33 @@ import Foundation
 
 public enum RemediationService {
 
+    /// Rules safe to remediate: explicitly selected, confirmed non-compliant, and
+    /// not covered by an active waiver.
+    public static func eligibleRules(
+        from rules: [Rule],
+        waivers: WaiverStore? = nil,
+        at date: Date = Date()
+    ) -> [Rule] {
+        rules.filter { rule in
+            rule.isSelectedForRemediation
+                && rule.status == .nonCompliant
+                && waivers?.activeWaiver(for: rule.id, at: date) == nil
+        }
+    }
+
     /// Generates a shell script that applies every selected non-compliant rule.
     public static func stagingScript(for rules: [Rule]) -> String {
-        rules
-            .filter { $0.isSelectedForRemediation && $0.status != .compliant }
-            .map(\.remediateCommand)
+        let consoleUsername = ExecutionContextService.currentConsoleUsername()
+        let commands = eligibleRules(from: rules)
+            .map { rule in
+                ExecutionContextService.command(
+                    for: rule,
+                    runningAsRoot: true,
+                    consoleUsername: consoleUsername
+                ) ?? "echo 'No logged-in console user for \(rule.id)' >&2; exit 70"
+            }
             .joined(separator: "\n")
+        return commands.isEmpty ? "" : "set -e\n\(commands)"
     }
 
     /// Whether the process already has root and can remediate without a GUI prompt.

@@ -5,7 +5,9 @@ struct BackupsView: View {
     @State private var backupName: String = "backup_" + ISO8601DateFormatter().string(from: Date()).replacingOccurrences(of: ":", with: "-")
     @State private var isBackingUp = false
     @State private var backupURL: URL? = nil
-    @State private var backupFailed = false
+    @State private var operationError: String?
+    @State private var operationMessage: String?
+    @State private var restoringPath: String?
     @State private var existingBackups: [URL] = []
 
     var body: some View {
@@ -24,13 +26,15 @@ struct BackupsView: View {
                 Button("Create Backup") {
                     Task {
                         isBackingUp = true
-                        backupFailed = false
+                        operationError = nil
+                        operationMessage = nil
                         let result = await BackupRestoreService.createBackup(name: backupName)
                         switch result {
                         case .success(let url):
                             backupURL = url
-                        case .failure:
-                            backupFailed = true
+                            operationMessage = "Backup created successfully."
+                        case .failure(let error):
+                            operationError = error.localizedDescription
                         }
                         existingBackups = BackupRestoreService.listBackups()
                         isBackingUp = false
@@ -45,9 +49,13 @@ struct BackupsView: View {
                 Label("Backup saved to: \(url.path)", systemImage: "checkmark.circle.fill")
                     .foregroundColor(.green).font(.subheadline)
             }
-            if backupFailed {
-                Label("Backup failed. Check administrator privileges.", systemImage: "xmark.circle.fill")
+            if let operationError {
+                Label(operationError, systemImage: "xmark.circle.fill")
                     .foregroundColor(.red).font(.subheadline)
+            }
+            if let operationMessage {
+                Label(operationMessage, systemImage: "checkmark.circle.fill")
+                    .foregroundColor(.green).font(.subheadline)
             }
 
             Divider()
@@ -63,10 +71,23 @@ struct BackupsView: View {
                         Text(url.lastPathComponent)
                         Spacer()
                         Button("Restore") {
-                            Task { _ = await BackupRestoreService.restore(from: url) }
+                            Task {
+                                restoringPath = url.path
+                                operationError = nil
+                                operationMessage = nil
+                                let restored = await BackupRestoreService.restore(from: url)
+                                if restored {
+                                    operationMessage = "Restored (url.lastPathComponent) successfully."
+                                } else {
+                                    operationError = "Restore failed for (url.lastPathComponent). No success was assumed."
+                                }
+                                restoringPath = nil
+                            }
                         }
                         .buttonStyle(.bordered)
                         .controlSize(.small)
+                        .disabled(restoringPath != nil)
+                        if restoringPath == url.path { ProgressView().controlSize(.small) }
                     }
                 }
                 .frame(maxHeight: 200)

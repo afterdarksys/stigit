@@ -33,7 +33,7 @@ public enum YAMLRuleLoader {
         var rules: [Rule] = []
         for case let fileURL as URL in enumerator {
             guard fileURL.pathExtension == "yaml" else { continue }
-            if let rule = try? loadRule(from: fileURL, overrideProfile: overrideProfile) {
+            if let rule = try loadRule(from: fileURL, overrideProfile: overrideProfile) {
                 rules.append(rule)
             }
         }
@@ -48,6 +48,15 @@ public enum YAMLRuleLoader {
         guard let id    = dict["id"]    as? String,
               let title = dict["title"] as? String
         else { return nil }
+
+        if let supportedVersions = dict["macOS"] as? [String],
+           !supportedVersions.isEmpty {
+            let currentMajor = ProcessInfo.processInfo.operatingSystemVersion.majorVersion
+            let supportedMajors = Set(supportedVersions.compactMap { version in
+                Int(version.split(separator: ".", maxSplits: 1).first ?? "")
+            })
+            guard supportedMajors.contains(currentMajor) else { return nil }
+        }
 
         let discussion = dict["discussion"] as? String ?? ""
 
@@ -94,6 +103,8 @@ public enum YAMLRuleLoader {
 
         // --- MobileConfig ---
         let mobileconfig = dict["mobileconfig"] as? Bool ?? false
+        let executionContext = (dict["execution_context"] as? String) == "console_user"
+            ? RuleExecutionContext.consoleUser : .system
 
         // --- Profiles from tags ---
         let tags = dict["tags"] as? [String] ?? []
@@ -105,8 +116,11 @@ public enum YAMLRuleLoader {
         let category = inferCategory(from: url, ruleId: id)
 
         // --- ODV substitution ---
-        let finalCheck     = substituteODV(checkCommand,     odv: dict["odv"])
-        let finalRemediate = substituteODV(remediateCommand, odv: dict["odv"])
+        let odvProfile = overrideProfile ?? (profiles.count == 1 ? profiles.first : nil)
+        let finalCheck = substituteODV(checkCommand, odv: dict["odv"], profile: odvProfile)
+        let finalRemediate = substituteODV(
+            remediateCommand, odv: dict["odv"], profile: odvProfile
+        )
 
         return Rule(
             id: id,
@@ -122,6 +136,7 @@ public enum YAMLRuleLoader {
             checkCommand: finalCheck,
             expectedResult: expectedResult,
             remediateCommand: finalRemediate,
+            executionContext: executionContext,
             mobileconfig: mobileconfig
         )
     }
@@ -163,17 +178,20 @@ public enum YAMLRuleLoader {
     }
 
     /// Replace `$ODV` placeholders with the recommended (or STIG) value.
-    private static func substituteODV(_ text: String, odv: Any?) -> String {
+    private static func substituteODV(
+        _ text: String,
+        odv: Any?,
+        profile: ComplianceProfile?
+    ) -> String {
         guard text.contains("$ODV"), let odvDict = odv as? [String: Any] else { return text }
-        // Prefer the STIG value; fall back to recommended
-        let value: String
-        if let stig = odvDict["stig"] as? String {
-            value = stig
-        } else if let rec = odvDict["recommended"] {
-            value = String(describing: rec)
+        let selected: Any?
+        if profile == .stig {
+            selected = odvDict["stig"] ?? odvDict["recommended"]
         } else {
-            return text
+            selected = odvDict["recommended"] ?? odvDict["stig"]
         }
+        guard let selected else { return text }
+        let value = String(describing: selected)
         return text.replacingOccurrences(of: "$ODV", with: value)
     }
 

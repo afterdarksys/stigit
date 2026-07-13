@@ -25,6 +25,13 @@ enum Console {
 struct ArgScanner {
     let tokens: [String]
 
+    static let valueFlags: Set<String> = [
+        "--profile", "--severity", "--rules-dir", "--waivers", "--format",
+        "--export", "--output", "--fleet-dir", "--fail-on", "--reason",
+        "--approved-by", "--ticket", "--expires", "--stale-days", "--interval",
+        "--org-name", "--profile-identifier",
+    ]
+
     init(_ tokens: [String]) {
         self.tokens = tokens
     }
@@ -44,7 +51,10 @@ struct ArgScanner {
         var skipNext = false
         for token in tokens {
             if skipNext { skipNext = false; continue }
-            if token.hasPrefix("--") { skipNext = true; continue }
+            if token.hasPrefix("-") {
+                skipNext = Self.valueFlags.contains(token)
+                continue
+            }
             result.append(token)
         }
         return result
@@ -99,6 +109,33 @@ struct ScanOptions {
     static func parse(_ args: ArgScanner) -> ScanOptions? {
         var options = ScanOptions()
 
+        let valueFlags: Set<String> = [
+            "--profile", "--severity", "--rules-dir", "--waivers", "--format",
+            "--export", "--output", "--fleet-dir", "--fail-on",
+        ]
+        let booleanFlags: Set<String> = [
+            "--quiet", "-q", "--history", "--compare", "--dry-run", "--backup",
+            "--non-interactive", "--remediate", "--generate-mobileconfig",
+        ]
+        var index = 0
+        while index < args.tokens.count {
+            let token = args.tokens[index]
+            if valueFlags.contains(token) {
+                guard index + 1 < args.tokens.count,
+                      !args.tokens[index + 1].hasPrefix("-") else {
+                    Console.error("Missing value for '\(token)'.")
+                    return nil
+                }
+                index += 2
+                continue
+            }
+            if token.hasPrefix("-") && !booleanFlags.contains(token) {
+                Console.error("Unknown option '\(token)'.")
+                return nil
+            }
+            index += 1
+        }
+
         if let raw = args.value(for: "--profile") {
             guard let profile = resolveProfile(raw) else {
                 Console.error("Unknown profile '\(raw)'. Valid: \(ComplianceProfile.allCases.map(\.key).joined(separator: " | "))")
@@ -135,6 +172,14 @@ struct ScanOptions {
             options.failOn = threshold
         }
         options.rulesDir = args.value(for: "--rules-dir")
+        if let rulesDir = options.rulesDir {
+            var isDirectory: ObjCBool = false
+            guard FileManager.default.fileExists(atPath: rulesDir, isDirectory: &isDirectory),
+                  isDirectory.boolValue else {
+                Console.error("Rule directory does not exist or is not a directory: \(rulesDir)")
+                return nil
+            }
+        }
         options.waiversPath = args.value(for: "--waivers")
         options.outputDir = args.value(for: "--output")
         options.fleetDir = args.value(for: "--fleet-dir")
@@ -164,20 +209,28 @@ struct ScanOptions {
 enum CLIPipeline {
 
     /// Default rule library plus any YAML rules dir, ready for scanning.
-    static func loadRules(rulesDir: String?, quiet: Bool) -> [Rule] {
+    static func loadRules(
+        rulesDir: String?,
+        quiet: Bool,
+        profile: ComplianceProfile? = nil
+    ) -> [Rule] {
         var rules = RuleStore.defaultRules()
         guard let rulesDir else { return rules }
 
         let dir = URL(fileURLWithPath: rulesDir)
-        guard let extra = try? YAMLRuleLoader.loadRules(from: dir) else {
-            Console.error("Warning: could not load rules from \(rulesDir)")
-            return rules
+        guard let extra = try? YAMLRuleLoader.loadRules(from: dir, profile: profile) else {
+            Console.error("Error: could not load rules from \(rulesDir)")
+            return []
         }
-        let existing = Set(rules.map(\.id))
-        let fresh = extra.filter { !existing.contains($0.id) }
-        rules += fresh
+        guard !extra.isEmpty else {
+            Console.error("Error: no usable YAML rules found in \(rulesDir)")
+            return []
+        }
+        let replacementIDs = Set(extra.map(\.id))
+        rules.removeAll { replacementIDs.contains($0.id) }
+        rules += extra
         if !quiet {
-            Console.error("Loaded \(fresh.count) additional rules from \(rulesDir)")
+            Console.error("Loaded \(extra.count) rule definitions from \(rulesDir)")
         }
         return rules
     }

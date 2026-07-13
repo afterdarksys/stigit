@@ -11,7 +11,8 @@ extension RuleStore {
             severity: .low,
             checkCommand: "defaults read com.apple.finder AppleShowAllFiles 2>/dev/null || echo 'NO'",
             expectedResult: .string("YES"),
-            remediateCommand: "defaults write com.apple.finder AppleShowAllFiles -bool true && killall Finder"
+            remediateCommand: "defaults write com.apple.finder AppleShowAllFiles -bool true && killall Finder",
+            executionContext: .consoleUser
         ),
         Rule(
             id: "safari_develop_menu",
@@ -22,7 +23,8 @@ extension RuleStore {
             severity: .low,
             checkCommand: "defaults read com.apple.Safari IncludeDevelopMenu 2>/dev/null || echo '0'",
             expectedResult: .string("1"),
-            remediateCommand: "defaults write com.apple.Safari IncludeDevelopMenu -int 1 && defaults write com.apple.Safari WebKitDeveloperExtrasEnabledPreferenceKey -bool true"
+            remediateCommand: "defaults write com.apple.Safari IncludeDevelopMenu -int 1 && defaults write com.apple.Safari WebKitDeveloperExtrasEnabledPreferenceKey -bool true",
+            executionContext: .consoleUser
         ),
         Rule(
             id: "dock_autohide_fast",
@@ -33,7 +35,8 @@ extension RuleStore {
             severity: .low,
             checkCommand: "defaults read com.apple.dock autohide-delay 2>/dev/null || echo '1'",
             expectedResult: .string("0"),
-            remediateCommand: "defaults write com.apple.dock autohide-delay -float 0 && defaults write com.apple.dock autohide-time-modifier -float 0.2 && killall Dock"
+            remediateCommand: "defaults write com.apple.dock autohide-delay -float 0 && defaults write com.apple.dock autohide-time-modifier -float 0.2 && killall Dock",
+            executionContext: .consoleUser
         ),
         Rule(
             id: "system_settings_software_update_current",
