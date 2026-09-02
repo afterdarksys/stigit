@@ -274,7 +274,19 @@ enum CLIPipeline {
         options: ScanOptions,
         waivers: WaiverStore
     ) -> ScanReport {
-        var report = ScanReport(rules: scannedRules, profile: options.profile, waivers: waivers)
+        let annotations: FindingAnnotationStore?
+        do {
+            annotations = try FindingAnnotationStore.load()
+        } catch {
+            annotations = nil
+            Console.error("Warning: annotations could not be loaded: \(error.localizedDescription)")
+        }
+        var report = ScanReport(
+            rules: scannedRules,
+            profile: options.profile,
+            waivers: waivers,
+            annotations: annotations
+        )
 
         if options.compare,
            let baseline = ScanHistoryService.latest(profileKey: options.profile.key) {

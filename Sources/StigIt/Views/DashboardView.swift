@@ -116,7 +116,8 @@ struct DashboardView: View {
         let report = ScanReport(
             rules: rules,
             profile: store.activeProfile,
-            waivers: try? WaiverStore.load()
+            waivers: try? WaiverStore.load(),
+            annotations: try? FindingAnnotationStore.load()
         )
         _ = try? ScanHistoryService.save(report)
         reloadHistory()

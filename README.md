@@ -291,6 +291,19 @@ into findings and are flagged on scan. The waiver file (`~/.stigit/waivers.json`
 shared between the CLI and the app's Waivers view, and can be checked into config
 management and distributed with `--waivers`.
 
+### Finding Labels and Analyst Notes
+
+After a scan, use the tag button on any rule row to attach workflow labels such as
+**Needs Review**, **Remediation Planned**, **Compensating Control**, **Not Applicable**,
+or **Possible False Positive**. Findings can also carry custom tags, a note, owner,
+ticket, due date, and analyst attribution. Labels are scoped to the endpoint, profile,
+and rule and are stored in `~/.stigit/annotations.json`.
+
+Labels never change the scanner's technical outcome or compliance score. Accepted
+risk must use the approved-waiver action, which requires a reason and approver. Saved
+annotations are included in JSON, CSV, summary, NDJSON, JUnit, history, and fleet
+reports; the scan view can be filtered by workflow label.
+
 ### Fleet reporting without a server
 
 `scan --fleet-dir <dir>` writes the endpoint's full report as `<hostname>.json`

@@ -4,6 +4,8 @@ import StigItCore
 struct RuleRowView: View {
     let rule: Rule
     @Binding var isSelected: Bool
+    let annotation: FindingAnnotation?
+    let onAnnotate: () -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
@@ -15,6 +17,14 @@ struct RuleRowView: View {
                 VStack(alignment: .trailing, spacing: 4) {
                     statusBadge(rule.status)
                     severityBadge(rule.severity)
+                    Button(action: onAnnotate) {
+                        Label(annotation == nil ? "Label" : "Edit labels",
+                              systemImage: annotation == nil ? "tag" : "tag.fill")
+                            .font(.caption)
+                    }
+                    .buttonStyle(.plain)
+                    .foregroundColor(annotation == nil ? .secondary : .accentColor)
+                    .accessibilityHint("Add workflow labels, notes, ownership, and ticket details")
                 }
             }
             Text(rule.description)
@@ -22,6 +32,9 @@ struct RuleRowView: View {
                 .foregroundColor(.secondary)
                 .lineLimit(2)
             metaTags
+            if let annotation {
+                annotationTags(annotation)
+            }
         }
         .padding(.vertical, 6)
     }
@@ -43,6 +56,33 @@ struct RuleRowView: View {
             .foregroundColor(color)
             .padding(.horizontal, 4).padding(.vertical, 1)
             .overlay(RoundedRectangle(cornerRadius: 3).stroke(color.opacity(0.5)))
+    }
+
+    private func annotationTags(_ annotation: FindingAnnotation) -> some View {
+        HStack(spacing: 6) {
+            ForEach(annotation.labels.prefix(3)) { label in
+                tag(label.rawValue, color: labelColor(label))
+            }
+            ForEach(annotation.customTags.prefix(max(0, 3 - annotation.labels.count)), id: \.self) {
+                tag($0, color: .teal)
+            }
+            let remaining = annotation.labels.count + annotation.customTags.count - 3
+            if remaining > 0 { tag("+\(remaining)", color: .secondary) }
+            if annotation.owner != nil { Image(systemName: "person.crop.circle").foregroundColor(.secondary) }
+            if annotation.ticket != nil { Image(systemName: "number.square").foregroundColor(.secondary) }
+        }
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("Finding labels")
+    }
+
+    private func labelColor(_ label: FindingLabel) -> Color {
+        switch label {
+        case .needsReview:           return .orange
+        case .remediationPlanned:    return .blue
+        case .compensatingControl:   return .indigo
+        case .notApplicable:         return .gray
+        case .possibleFalsePositive: return .pink
+        }
     }
 
     private func statusBadge(_ status: RuleStatus) -> some View {

@@ -27,6 +27,7 @@ public struct ScanReport: Codable, Sendable {
         public let cceId: String?
         public let nistControls: [String]
         public let waiver: Waiver?
+        public let annotation: FindingAnnotation?
     }
 
     public struct Summary: Codable, Sendable {
@@ -54,7 +55,7 @@ public struct ScanReport: Codable, Sendable {
         public let fixes: [Change]
     }
 
-    public static let currentSchemaVersion = 1
+    public static let currentSchemaVersion = 2
 
     public let schemaVersion: Int
     public let generatedAt: Date
@@ -98,6 +99,7 @@ public struct ScanReport: Codable, Sendable {
         profile: ComplianceProfile,
         endpoint: EndpointInfo = .current(),
         waivers: WaiverStore? = nil,
+        annotations: FindingAnnotationStore? = nil,
         generatedAt: Date = Date()
     ) {
         self.schemaVersion = Self.currentSchemaVersion
@@ -125,7 +127,12 @@ public struct ScanReport: Codable, Sendable {
                     stigId: rule.stigId,
                     cceId: rule.cceId,
                     nistControls: rule.nistControls,
-                    waiver: outcome == .waived ? waiver : nil
+                    waiver: outcome == .waived ? waiver : nil,
+                    annotation: annotations?.annotation(
+                        for: rule.id,
+                        profileKey: profile.key,
+                        endpoint: endpoint
+                    )
                 )
             }
     }
@@ -133,7 +140,7 @@ public struct ScanReport: Codable, Sendable {
     public init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         let version = try container.decode(Int.self, forKey: .schemaVersion)
-        guard version == Self.currentSchemaVersion else {
+        guard version == 1 || version == Self.currentSchemaVersion else {
             throw DecodingError.dataCorruptedError(
                 forKey: .schemaVersion,
                 in: container,

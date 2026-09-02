@@ -170,6 +170,15 @@ struct FleetView: View {
                             .background(Capsule().fill(severityColor(result.severity)))
                             .foregroundColor(.white)
                         Text(result.title)
+                        if let annotation = result.annotation {
+                            ForEach(annotation.labels.prefix(2)) { label in
+                                Text(label.rawValue)
+                                    .font(.caption2)
+                                    .padding(.horizontal, 5).padding(.vertical, 1)
+                                    .overlay(Capsule().stroke(Color.accentColor.opacity(0.6)))
+                                    .foregroundColor(.accentColor)
+                            }
+                        }
                         Spacer()
                         if let stigId = result.stigId {
                             Text(stigId).font(.caption).foregroundColor(.secondary)

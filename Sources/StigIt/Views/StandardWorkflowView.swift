@@ -10,12 +10,18 @@ struct StandardWorkflowView: View {
     @State private var showingStaging = false
     @State private var exportedURL: URL? = nil
     @State private var exportError: String? = nil
+    @State private var annotationStore = FindingAnnotationStore(annotations: [])
+    @State private var endpoint = EndpointInfo.current()
+    @State private var labelFilter: FindingLabel? = nil
+    @State private var editingRule: Rule?
+    @State private var waiverRule: Rule?
 
     private var filteredRules: [Rule] {
-        store.rules.filter {
-            $0.profiles.contains(profile)
-            && $0.category == selectedCategory
-            && (severityFilter == nil || $0.severity == severityFilter)
+        store.rules.filter { rule in
+            rule.profiles.contains(profile)
+            && rule.category == selectedCategory
+            && (severityFilter == nil || rule.severity == severityFilter)
+            && (labelFilter.map { annotation(for: rule)?.labels.contains($0) == true } ?? true)
         }
     }
 
@@ -24,7 +30,22 @@ struct StandardWorkflowView: View {
             CategorySidebarView(profile: profile, selection: $selectedCategory)
                 .frame(minWidth: 200, idealWidth: 230, maxWidth: 320)
             VStack(spacing: 0) {
-                SeverityFilterBar(selection: $severityFilter)
+                HStack(spacing: 0) {
+                    SeverityFilterBar(selection: $severityFilter)
+                    Spacer()
+                    Menu {
+                        Button("All labels") { labelFilter = nil }
+                        Divider()
+                        ForEach(FindingLabel.allCases) { label in
+                            Button(label.rawValue) { labelFilter = label }
+                        }
+                    } label: {
+                        Label(labelFilter?.rawValue ?? "All labels", systemImage: "tag")
+                    }
+                    .menuStyle(.borderlessButton)
+                    .fixedSize()
+                    .padding(.trailing, 12)
+                }
                 Divider()
                 ruleList
                 Divider()
@@ -36,6 +57,23 @@ struct StandardWorkflowView: View {
         .toolbar { toolbarContent }
         .sheet(isPresented: $showingStaging) {
             StagingModalView(profile: profile).frame(minWidth: 600, minHeight: 400)
+        }
+        .sheet(item: $editingRule) { rule in
+            FindingAnnotationSheet(
+                rule: rule,
+                profile: profile,
+                endpoint: endpoint,
+                existing: annotation(for: rule),
+                onSave: saveAnnotation,
+                onDelete: { removeAnnotation(for: rule) },
+                onCreateWaiver: {
+                    editingRule = nil
+                    waiverRule = rule
+                }
+            )
+        }
+        .sheet(item: $waiverRule) { rule in
+            QuickWaiverSheet(rule: rule, onSave: saveWaiver)
         }
         .alert("Operation Error", isPresented: Binding(
             get: { exportError != nil },
@@ -50,6 +88,7 @@ struct StandardWorkflowView: View {
             Button("OK") { exportedURL = nil }
         } message: { Text(exportedURL.map { "Saved to:\n\($0.path)" } ?? "") }
         .onAppear {
+            loadAnnotations()
             if selectedCategory == nil {
                 let categories = Set(store.rules.filter { $0.profiles.contains(profile) }.map(\.category))
                 selectedCategory = Array(categories).sorted { $0.rawValue < $1.rawValue }.first
@@ -64,7 +103,12 @@ struct StandardWorkflowView: View {
             ForEach(filteredRules) { rule in
                 if let index = store.rules.firstIndex(where: { $0.id == rule.id }) {
                     @Bindable var s = store
-                    RuleRowView(rule: rule, isSelected: $s.rules[index].isSelectedForRemediation)
+                    RuleRowView(
+                        rule: rule,
+                        isSelected: $s.rules[index].isSelectedForRemediation,
+                        annotation: annotation(for: rule),
+                        onAnnotate: { editingRule = rule }
+                    )
                 }
             }
         }
@@ -182,6 +226,48 @@ struct StandardWorkflowView: View {
             exportedURL = try MobileConfigGenerator.write(rules: store.rules, profile: profile)
         } catch {
             exportError = error.localizedDescription
+        }
+    }
+
+    private func annotation(for rule: Rule) -> FindingAnnotation? {
+        annotationStore.annotation(for: rule.id, profileKey: profile.key, endpoint: endpoint)
+    }
+
+    private func loadAnnotations() {
+        do {
+            annotationStore = try FindingAnnotationStore.load()
+        } catch {
+            exportError = "Annotations could not be loaded: \(error.localizedDescription)"
+        }
+    }
+
+    private func saveAnnotation(_ annotation: FindingAnnotation) {
+        annotationStore.upsert(annotation)
+        do {
+            try annotationStore.save()
+        } catch {
+            exportError = "Annotation could not be saved: \(error.localizedDescription)"
+            loadAnnotations()
+        }
+    }
+
+    private func removeAnnotation(for rule: Rule) {
+        annotationStore.remove(ruleID: rule.id, profileKey: profile.key, endpoint: endpoint)
+        do {
+            try annotationStore.save()
+        } catch {
+            exportError = "Annotation could not be removed: \(error.localizedDescription)"
+            loadAnnotations()
+        }
+    }
+
+    private func saveWaiver(_ waiver: Waiver) {
+        do {
+            var store = try WaiverStore.load()
+            store.upsert(waiver)
+            try store.save()
+        } catch {
+            exportError = "Waiver could not be saved: \(error.localizedDescription)"
         }
     }
 }

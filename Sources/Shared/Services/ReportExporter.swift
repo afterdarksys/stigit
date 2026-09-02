@@ -72,7 +72,8 @@ public enum ReportExporter {
         ScanReport(
             rules: rules,
             profile: profile,
-            waivers: try? WaiverStore.load()
+            waivers: try? WaiverStore.load(),
+            annotations: try? FindingAnnotationStore.load()
         )
     }
 
@@ -84,6 +85,8 @@ public enum ReportExporter {
             "Rule ID", "Title", "Category", "Severity", "Outcome",
             "STIG ID", "CCE ID", "NIST Controls",
             "Waiver Reason", "Waiver Approved By", "Waiver Expires",
+            "Labels", "Custom Tags", "Annotation Note", "Owner", "Ticket",
+            "Due Date", "Annotation Updated At", "Annotation Updated By",
             "Profile", "Hostname",
         ].joined(separator: ","))
 
@@ -101,6 +104,14 @@ public enum ReportExporter {
                 csvEscape(r.waiver?.reason ?? ""),
                 csvEscape(r.waiver?.approvedBy ?? ""),
                 csvEscape(r.waiver?.expiresAt.map { dateFormatter.string(from: $0) } ?? ""),
+                csvEscape(r.annotation?.labels.map(\.rawValue).joined(separator: "; ") ?? ""),
+                csvEscape(r.annotation?.customTags.joined(separator: "; ") ?? ""),
+                csvEscape(r.annotation?.note ?? ""),
+                csvEscape(r.annotation?.owner ?? ""),
+                csvEscape(r.annotation?.ticket ?? ""),
+                csvEscape(r.annotation?.dueDate.map { dateFormatter.string(from: $0) } ?? ""),
+                csvEscape(r.annotation.map { dateFormatter.string(from: $0.updatedAt) } ?? ""),
+                csvEscape(r.annotation?.updatedBy ?? ""),
                 csvEscape(report.profileName),
                 csvEscape(report.endpoint.hostname),
             ].joined(separator: ","))
@@ -131,6 +142,11 @@ public enum ReportExporter {
             let stigId: String?
             let nistControls: [String]
             let waivedBy: String?
+            let labels: [String]
+            let customTags: [String]
+            let annotationNote: String?
+            let owner: String?
+            let ticket: String?
         }
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.sortedKeys]
@@ -149,7 +165,12 @@ public enum ReportExporter {
                 outcome: r.outcome.rawValue,
                 stigId: r.stigId,
                 nistControls: r.nistControls,
-                waivedBy: r.waiver?.approvedBy
+                waivedBy: r.waiver?.approvedBy,
+                labels: r.annotation?.labels.map(\.rawValue) ?? [],
+                customTags: r.annotation?.customTags ?? [],
+                annotationNote: r.annotation?.note,
+                owner: r.annotation?.owner,
+                ticket: r.annotation?.ticket
             )
             return String(data: try encoder.encode(line), encoding: .utf8) ?? ""
         }.joined(separator: "\n")
@@ -172,9 +193,16 @@ public enum ReportExporter {
             let name = xmlEscape("\(r.id): \(r.title)")
             let classname = xmlEscape("stigit.\(report.profileKey).\(r.category)")
             let open = #"  <testcase classname="\#(classname)" name="\#(name)">"#
+            let annotation = junitAnnotation(r.annotation)
             switch r.outcome {
             case .compliant:
-                lines.append(#"  <testcase classname="\#(classname)" name="\#(name)"/>"#)
+                if let annotation {
+                    lines.append(open)
+                    lines.append(#"    <system-out>\#(xmlEscape(annotation))</system-out>"#)
+                    lines.append("  </testcase>")
+                } else {
+                    lines.append(#"  <testcase classname="\#(classname)" name="\#(name)"/>"#)
+                }
             case .nonCompliant:
                 lines.append(open)
                 let detail = xmlEscape(
@@ -182,19 +210,23 @@ public enum ReportExporter {
                     + (r.stigId.map { " stig=\($0)" } ?? "")
                 )
                 lines.append(#"    <failure message="Non-compliant" type="\#(xmlEscape(r.severity.rawValue))">\#(detail)</failure>"#)
+                if let annotation { lines.append(#"    <system-out>\#(xmlEscape(annotation))</system-out>"#) }
                 lines.append("  </testcase>")
             case .waived:
                 lines.append(open)
                 let reason = xmlEscape(r.waiver.map { "Waived by \($0.approvedBy): \($0.reason)" } ?? "Waived")
                 lines.append(#"    <skipped message="\#(reason)"/>"#)
+                if let annotation { lines.append(#"    <system-out>\#(xmlEscape(annotation))</system-out>"#) }
                 lines.append("  </testcase>")
             case .unknown:
                 lines.append(open)
                 lines.append(#"    <skipped message="Not evaluated"/>"#)
+                if let annotation { lines.append(#"    <system-out>\#(xmlEscape(annotation))</system-out>"#) }
                 lines.append("  </testcase>")
             case .error:
                 lines.append(open)
                 lines.append(#"    <error message="Check command failed"/>"#)
+                if let annotation { lines.append(#"    <system-out>\#(xmlEscape(annotation))</system-out>"#) }
                 lines.append("  </testcase>")
             }
         }
@@ -208,6 +240,21 @@ public enum ReportExporter {
             .replacingOccurrences(of: "<", with: "&lt;")
             .replacingOccurrences(of: ">", with: "&gt;")
             .replacingOccurrences(of: "\"", with: "&quot;")
+    }
+
+    private static func junitAnnotation(_ annotation: FindingAnnotation?) -> String? {
+        guard let annotation else { return nil }
+        var parts: [String] = []
+        if !annotation.labels.isEmpty {
+            parts.append("labels=\(annotation.labels.map(\.rawValue).joined(separator: ", "))")
+        }
+        if !annotation.customTags.isEmpty {
+            parts.append("tags=\(annotation.customTags.joined(separator: ", "))")
+        }
+        if !annotation.note.isEmpty { parts.append("note=\(annotation.note)") }
+        if let owner = annotation.owner { parts.append("owner=\(owner)") }
+        if let ticket = annotation.ticket { parts.append("ticket=\(ticket)") }
+        return parts.isEmpty ? nil : "StigIt annotation: " + parts.joined(separator: "; ")
     }
 
     // MARK: - Summary
@@ -278,6 +325,22 @@ public enum ReportExporter {
             lines.append("----- PASSING CONTROLS (\(passing.count)) ----------------")
             for r in passing {
                 lines.append("  [PASS] \(r.title)")
+            }
+        }
+
+        let annotated = report.results.filter { $0.annotation != nil }
+        if !annotated.isEmpty {
+            lines.append("")
+            lines.append("----- ANNOTATED CONTROLS (\(annotated.count)) -------------")
+            for r in annotated {
+                guard let annotation = r.annotation else { continue }
+                let labels = annotation.labels.map(\.rawValue) + annotation.customTags
+                lines.append("  [LABEL] \(r.title): \(labels.joined(separator: ", "))")
+                if !annotation.note.isEmpty { lines.append("          \(annotation.note)") }
+                let owner = annotation.owner.map { "owner=\($0)" }
+                let ticket = annotation.ticket.map { "ticket=\($0)" }
+                let details = [owner, ticket].compactMap { $0 }
+                if !details.isEmpty { lines.append("          \(details.joined(separator: "  "))") }
             }
         }
         lines.append("")
