@@ -112,9 +112,10 @@ public enum YAMLRuleLoader {
         let isRevision4Only = !hasRevision5Tag && tags.contains { $0.hasPrefix("800-53r4_") }
         var profiles = Set(tags.flatMap { ComplianceProfile.all(fromTag: $0) })
         if let forced = overrideProfile {
-            if FISMAControlBaselines.controls(for: forced) != nil {
+            if let baseline = forced.baselineControls {
+                let referencedControls = Set(nist53r5.map(NISTControlID.normalize))
                 guard !isRevision4Only,
-                      FISMAControlBaselines.profiles(for: nist53r5).contains(forced)
+                      !referencedControls.isDisjoint(with: baseline)
                 else { return nil }
             }
             profiles.insert(forced)
@@ -147,7 +148,8 @@ public enum YAMLRuleLoader {
             remediateCommand: finalRemediate,
             executionContext: executionContext,
             mobileconfig: mobileconfig,
-            mapNISTControlsToFISMA: !isRevision4Only
+            mapNISTControlsToFISMA: !isRevision4Only,
+            mapNISTControlsToFedRAMP: !isRevision4Only
         )
     }
 

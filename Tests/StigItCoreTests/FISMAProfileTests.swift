@@ -77,5 +77,9 @@ struct FISMAProfileTests {
         let summary = try ReportExporter.export(report: report, format: .summary)
         #expect(summary.contains("1 of 149 baseline controls have endpoint rule mappings"))
         #expect(summary.contains("Endpoint technical assessment only"))
+
+        let junit = try ReportExporter.export(report: report, format: .junit)
+        #expect(junit.contains("fisma.baseline"))
+        #expect(junit.contains("nist.sp800-53.version\" value=\"5.2.0"))
     }
 }

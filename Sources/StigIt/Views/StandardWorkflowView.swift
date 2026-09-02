@@ -123,7 +123,7 @@ struct StandardWorkflowView: View {
             Image(systemName: "building.columns.circle.fill")
                 .foregroundColor(.accentColor)
             VStack(alignment: .leading, spacing: 2) {
-                Text("\(framework.baseline) impact baseline · NIST SP 800-53B \(framework.version)")
+                Text("\(framework.baseline) · \(framework.versionDescription)")
                     .font(.subheadline).bold()
                 Text(framework.scopeNote)
                     .font(.caption)

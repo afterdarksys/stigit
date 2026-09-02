@@ -140,10 +140,10 @@ public struct ScanReport: Codable, Sendable {
                     )
                 )
             }
-        if let baseline = FISMAControlBaselines.controls(for: profile) {
+        if let baseline = profile.baselineControls {
             self.assessedFrameworkControls = Array(Set(results
                 .flatMap(\.nistControls)
-                .map(FISMAControlBaselines.normalize))
+                .map(NISTControlID.normalize))
                 .intersection(baseline)).sorted()
         } else {
             self.assessedFrameworkControls = []

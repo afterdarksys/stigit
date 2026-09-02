@@ -148,7 +148,7 @@ public enum FISMAControlBaselines {
         "sr-11", "sr-11.1", "sr-11.2", "sr-12",
     ]
     public static func profiles(for controls: [String]) -> [ComplianceProfile] {
-        let ids = Set(controls.map(normalize))
+        let ids = Set(controls.map(NISTControlID.normalize))
         guard !ids.isEmpty else { return [] }
         var profiles: [ComplianceProfile] = []
         if !ids.isDisjoint(with: low) { profiles.append(.fismaLow) }
@@ -166,10 +166,4 @@ public enum FISMAControlBaselines {
         }
     }
 
-    static func normalize(_ control: String) -> String {
-        control.trimmingCharacters(in: .whitespacesAndNewlines)
-            .lowercased()
-            .replacingOccurrences(of: "(", with: ".")
-            .replacingOccurrences(of: ")", with: "")
-    }
 }

@@ -11,6 +11,16 @@ struct CLIOptionTests {
         #expect(ScanOptions.parse(ArgScanner(["--profile", "fisma-high"]))?.profile == .fismaHigh)
     }
 
+    @Test("FedRAMP classes and legacy impact aliases are accepted by the CLI")
+    func fedrampProfilesParse() {
+        #expect(ScanOptions.parse(ArgScanner(["--profile", "fedramp-b"]))?.profile == .fedrampB)
+        #expect(ScanOptions.parse(ArgScanner(["--profile", "fedramp-c"]))?.profile == .fedrampC)
+        #expect(ScanOptions.parse(ArgScanner(["--profile", "fedramp-d"]))?.profile == .fedrampD)
+        #expect(ScanOptions.parse(ArgScanner(["--profile", "fedramp-low"]))?.profile == .fedrampB)
+        #expect(ScanOptions.parse(ArgScanner(["--profile", "fedramp-moderate"]))?.profile == .fedrampC)
+        #expect(ScanOptions.parse(ArgScanner(["--profile", "fedramp-high"]))?.profile == .fedrampD)
+    }
+
     @Test("A value option without a value is rejected")
     func missingProfileValueIsRejected() {
         let options = ScanOptions.parse(ArgScanner(["--profile"]))

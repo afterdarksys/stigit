@@ -130,6 +130,9 @@ struct YAMLRuleLoaderTests {
         #expect(!rule.profiles.contains(.fismaLow))
         #expect(rule.profiles.contains(.fismaModerate))
         #expect(rule.profiles.contains(.fismaHigh))
+        #expect(!rule.profiles.contains(.fedrampB))
+        #expect(rule.profiles.contains(.fedrampC))
+        #expect(rule.profiles.contains(.fedrampD))
     }
 
     @Test("FISMA profile overrides reject controls outside the selected baseline")
@@ -158,6 +161,34 @@ struct YAMLRuleLoaderTests {
 
         #expect(low == nil)
         #expect(moderate?.profiles.contains(.fismaModerate) == true)
+    }
+
+    @Test("FedRAMP profile overrides reject controls outside the selected class")
+    func fedrampOverrideFailsClosed() throws {
+        let directory = try temporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let file = directory.appendingPathComponent("class-c-only.yaml")
+        try """
+        id: class_c_only
+        title: Class C Only
+        discussion: Test rule
+        check: printf 1
+        result:
+          integer: 1
+        fix: printf fixed
+        tags:
+          - 800-53r5_moderate
+        references:
+          800-53r5:
+            - AC-11
+        severity: medium
+        """.write(to: file, atomically: true, encoding: .utf8)
+
+        let classB = try YAMLRuleLoader.loadRule(from: file, overrideProfile: .fedrampB)
+        let classC = try YAMLRuleLoader.loadRule(from: file, overrideProfile: .fedrampC)
+
+        #expect(classB == nil)
+        #expect(classC?.profiles.contains(.fedrampC) == true)
     }
 
     private func temporaryDirectory() throws -> URL {

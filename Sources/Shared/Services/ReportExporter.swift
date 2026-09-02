@@ -87,7 +87,7 @@ public enum ReportExporter {
             "Waiver Reason", "Waiver Approved By", "Waiver Expires",
             "Labels", "Custom Tags", "Annotation Note", "Owner", "Ticket",
             "Due Date", "Annotation Updated At", "Annotation Updated By",
-            "Framework Version", "Impact Baseline", "Baseline Control Count",
+            "Framework Version", "Framework Baseline", "Baseline Control Count",
             "Profile", "Hostname",
         ].joined(separator: ","))
 
@@ -199,9 +199,17 @@ public enum ReportExporter {
         )
         if let framework = report.framework {
             lines.append("  <properties>")
-            lines.append(#"    <property name="fisma.baseline" value="\#(xmlEscape(framework.baseline))"/>"#)
-            lines.append(#"    <property name="nist.sp800-53.version" value="\#(xmlEscape(framework.version))"/>"#)
+            lines.append(#"    <property name="compliance.framework" value="\#(xmlEscape(framework.name))"/>"#)
+            lines.append(#"    <property name="compliance.baseline" value="\#(xmlEscape(framework.baseline))"/>"#)
+            lines.append(#"    <property name="compliance.framework-version" value="\#(xmlEscape(framework.version))"/>"#)
             lines.append(#"    <property name="baseline.control-count" value="\#(framework.baselineControlCount)"/>"#)
+            if report.profileKey.hasPrefix("fisma-") {
+                lines.append(#"    <property name="fisma.baseline" value="\#(xmlEscape(framework.baseline))"/>"#)
+                lines.append(#"    <property name="nist.sp800-53.version" value="\#(xmlEscape(framework.version))"/>"#)
+            } else if report.profileKey.hasPrefix("fedramp-") {
+                lines.append(#"    <property name="fedramp.class" value="\#(xmlEscape(framework.baseline))"/>"#)
+                lines.append(#"    <property name="nist.sp800-53.version" value="\#(FedRAMPControlBaselines.catalogVersion)"/>"#)
+            }
             lines.append("  </properties>")
         }
         for r in report.results {
@@ -289,7 +297,7 @@ public enum ReportExporter {
         lines.append(" Date     : \(report.generatedAt)")
         if let framework = report.framework {
             lines.append(" Standard : \(framework.name)")
-            lines.append(" Baseline : \(framework.baseline), NIST SP 800-53B \(framework.version)")
+            lines.append(" Baseline : \(framework.baseline), \(framework.versionDescription)")
             lines.append(" Mapping  : \(report.assessedFrameworkControls.count) of \(framework.baselineControlCount) baseline controls have endpoint rule mappings")
             lines.append(" Scope    : \(framework.scopeNote)")
         }

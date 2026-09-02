@@ -86,4 +86,23 @@ struct MobileConfigGeneratorTests {
             "does not establish FISMA compliance or authorization"
         ) == true)
     }
+
+    @Test("FedRAMP configuration profiles preserve the certification boundary")
+    @MainActor
+    func fedrampDescriptionDoesNotOverclaim() throws {
+        let xml = MobileConfigGenerator.generate(
+            rules: RuleStore.defaultRules(), profile: .fedrampC
+        )
+        let data = try #require(xml.data(using: .utf8))
+        let root = try #require(
+            try PropertyListSerialization.propertyList(
+                from: data, options: [], format: nil
+            ) as? [String: Any]
+        )
+
+        #expect(root["PayloadDisplayName"] as? String == "StigIt FedRAMP Rev. 5 Class C Endpoint Controls")
+        #expect((root["PayloadDescription"] as? String)?.contains(
+            "does not establish FedRAMP Certification or an agency authorization"
+        ) == true)
+    }
 }

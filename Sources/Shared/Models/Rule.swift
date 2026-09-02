@@ -6,6 +6,9 @@ public enum ComplianceProfile: String, Codable, CaseIterable, Sendable, Identifi
     case fismaLow = "FISMA Low Impact"
     case fismaModerate = "FISMA Moderate Impact"
     case fismaHigh = "FISMA High Impact"
+    case fedrampB = "FedRAMP Rev. 5 Class B"
+    case fedrampC = "FedRAMP Rev. 5 Class C"
+    case fedrampD = "FedRAMP Rev. 5 Class D"
     case soc2     = "SOC2"
     case iso27001 = "ISO/IEC 27001"
     case gdpr     = "GDPR"
@@ -30,6 +33,9 @@ public enum ComplianceProfile: String, Codable, CaseIterable, Sendable, Identifi
         case .fismaLow: return "fisma-low"
         case .fismaModerate: return "fisma-moderate"
         case .fismaHigh: return "fisma-high"
+        case .fedrampB: return "fedramp-b"
+        case .fedrampC: return "fedramp-c"
+        case .fedrampD: return "fedramp-d"
         case .soc2:     return "soc2"
         case .iso27001: return "iso27001"
         case .gdpr:     return "gdpr"
@@ -47,7 +53,20 @@ public enum ComplianceProfile: String, Codable, CaseIterable, Sendable, Identifi
     }
 
     public static func from(key: String) -> ComplianceProfile? {
-        allCases.first { $0.key == key.lowercased() }
+        let normalized = key.lowercased()
+        if let canonical = allCases.first(where: { $0.key == normalized }) {
+            return canonical
+        }
+        switch normalized {
+        case "fedramp-class-b", "fedramp-low", "fedramp-li-saas", "fedramp-lisaas":
+            return .fedrampB
+        case "fedramp-class-c", "fedramp-moderate":
+            return .fedrampC
+        case "fedramp-class-d", "fedramp-high":
+            return .fedrampD
+        default:
+            return nil
+        }
     }
 
     /// Maps the YAML tag strings from the macos_security project to profiles
@@ -79,22 +98,48 @@ public enum ComplianceProfile: String, Codable, CaseIterable, Sendable, Identifi
     }
 
     public var frameworkInfo: ComplianceFrameworkInfo? {
-        guard let controls = FISMAControlBaselines.controls(for: self) else { return nil }
-        let baseline: String
         switch self {
-        case .fismaLow:      baseline = "Low"
-        case .fismaModerate: baseline = "Moderate"
-        case .fismaHigh:     baseline = "High"
-        default:             return nil
+        case .fismaLow, .fismaModerate, .fismaHigh:
+            guard let controls = FISMAControlBaselines.controls(for: self) else { return nil }
+            let baseline: String
+            switch self {
+            case .fismaLow:      baseline = "Low"
+            case .fismaModerate: baseline = "Moderate"
+            case .fismaHigh:     baseline = "High"
+            default:             return nil
+            }
+            return ComplianceFrameworkInfo(
+                name: "Federal Information Security Modernization Act (FISMA)",
+                version: FISMAControlBaselines.version,
+                baseline: baseline,
+                baselineControlCount: controls.count,
+                source: FISMAControlBaselines.source,
+                scopeNote: FISMAControlBaselines.scopeNote
+            )
+        case .fedrampB, .fedrampC, .fedrampD:
+            guard let controls = FedRAMPControlBaselines.controls(for: self) else { return nil }
+            let baseline: String
+            switch self {
+            case .fedrampB: baseline = "Rev. 5 Class B (Low / LI-SaaS successor)"
+            case .fedrampC: baseline = "Rev. 5 Class C (Moderate successor)"
+            case .fedrampD: baseline = "Rev. 5 Class D (High successor)"
+            default: return nil
+            }
+            return ComplianceFrameworkInfo(
+                name: "FedRAMP Consolidated Rules for 2026",
+                version: FedRAMPControlBaselines.version,
+                baseline: baseline,
+                baselineControlCount: controls.count,
+                source: FedRAMPControlBaselines.source,
+                scopeNote: FedRAMPControlBaselines.scopeNote
+            )
+        default:
+            return nil
         }
-        return ComplianceFrameworkInfo(
-            name: "Federal Information Security Modernization Act (FISMA)",
-            version: FISMAControlBaselines.version,
-            baseline: baseline,
-            baselineControlCount: controls.count,
-            source: FISMAControlBaselines.source,
-            scopeNote: FISMAControlBaselines.scopeNote
-        )
+    }
+
+    public var baselineControls: Set<String>? {
+        FISMAControlBaselines.controls(for: self) ?? FedRAMPControlBaselines.controls(for: self)
     }
 }
 
@@ -105,6 +150,12 @@ public struct ComplianceFrameworkInfo: Codable, Hashable, Sendable {
     public let baselineControlCount: Int
     public let source: String
     public let scopeNote: String
+
+    public var versionDescription: String {
+        name.hasPrefix("FedRAMP")
+            ? "rules version \(version) · NIST SP 800-53 Rev. 5.2.0"
+            : "NIST SP 800-53B \(version)"
+    }
 }
 
 public enum RuleCategory: String, Codable, CaseIterable, Sendable, Identifiable {
@@ -203,7 +254,8 @@ public struct Rule: Identifiable, Codable, Hashable, Sendable {
         mobileconfig: Bool = false,
         status: RuleStatus = .unknown,
         isSelectedForRemediation: Bool = true,
-        mapNISTControlsToFISMA: Bool = true
+        mapNISTControlsToFISMA: Bool = true,
+        mapNISTControlsToFedRAMP: Bool = true
     ) {
         self.id = id
         self.title = title
@@ -211,6 +263,12 @@ public struct Rule: Identifiable, Codable, Hashable, Sendable {
         var resolvedProfiles = profiles
         if mapNISTControlsToFISMA && profiles.contains(.nist) {
             for profile in FISMAControlBaselines.profiles(for: nistControls)
+                where !resolvedProfiles.contains(profile) {
+                resolvedProfiles.append(profile)
+            }
+        }
+        if mapNISTControlsToFedRAMP && profiles.contains(.nist) {
+            for profile in FedRAMPControlBaselines.profiles(for: nistControls)
                 where !resolvedProfiles.contains(profile) {
                 resolvedProfiles.append(profile)
             }

@@ -34,6 +34,9 @@ and the organization's normal authorization and risk-management process.
 | FISMA Low Impact (NIST SP 800-53B 5.2.0) | `fisma-low` |
 | FISMA Moderate Impact (NIST SP 800-53B 5.2.0) | `fisma-moderate` |
 | FISMA High Impact (NIST SP 800-53B 5.2.0) | `fisma-high` |
+| FedRAMP Rev. 5 Class B (Low / LI-SaaS successor) | `fedramp-b` |
+| FedRAMP Rev. 5 Class C (Moderate successor) | `fedramp-c` |
+| FedRAMP Rev. 5 Class D (High successor) | `fedramp-d` |
 | NIST SP 800-171 Rev 3 | `nist171` |
 | CMMC Level 1 | `cmmc1` |
 | CMMC Level 2 | `cmmc2` |
@@ -62,6 +65,30 @@ apply the privacy baseline where applicable, assess organization-level and nonte
 controls, authorize the system, and conduct continuous monitoring. See the official
 [NIST RMF guidance](https://csrc.nist.gov/Projects/risk-management/about-rmf)
 and [FIPS 200](https://csrc.nist.gov/pubs/fips/200/final).
+
+---
+
+### FedRAMP profile scope
+
+The FedRAMP profiles implement the Rev. 5 Class B, C, and D control lists from
+rule `FRC-CSF-BSL` in the official
+[FedRAMP Consolidated Rules for 2026](https://www.fedramp.gov/2026/reference/rev5/d/fedramp-certification/).
+The embedded lists are pinned to machine-readable rules version `2026.07.14.01`
+at [source commit `58efbf3`](https://github.com/FedRAMP/rules/blob/58efbf3d898496dd4a3a419eba78e458bbad5cb6/fedramp-consolidated-rules.json):
+155 controls for Class B, 322 for Class C, and 409 for Class D. The CLI also
+accepts `fedramp-low` and `fedramp-li-saas` as Class B aliases,
+`fedramp-moderate` as a Class C alias, and `fedramp-high` as a Class D alias.
+
+StigIt maps macOS endpoint checks to controls in the selected FedRAMP class and
+records the rules version, class, official control count, mapped-control count,
+source, and scope boundary in exported evidence. This does not establish
+FedRAMP Certification or an agency authorization. A cloud service provider must
+still define its authorization boundary, maintain a Security Decision Record,
+assign parameters, address all applicable provider and agency responsibilities,
+undergo independent assessment, and meet continuous-monitoring and vulnerability
+management requirements. See the official
+[Rev. 5 control guidance](https://www.fedramp.gov/2026/providers/rev5/controls/)
+and [guidance for agencies using certification packages](https://www.fedramp.gov/2026/agencies/use/packages/rev5/).
 
 ---
 

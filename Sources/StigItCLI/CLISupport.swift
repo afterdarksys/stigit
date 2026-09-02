@@ -341,7 +341,8 @@ enum CLIPipeline {
         let summary = report.summary
         if !quiet {
             if let framework = report.framework {
-                print("Framework: FISMA \(framework.baseline) Impact — NIST SP 800-53B \(framework.version)")
+                print("Framework: \(framework.name) — \(framework.baseline)")
+                print("Version: \(framework.versionDescription)")
                 print("Endpoint mappings: \(report.assessedFrameworkControls.count) of \(framework.baselineControlCount) baseline controls")
                 print("Scope: \(framework.scopeNote)")
                 print()
