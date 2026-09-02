@@ -101,6 +101,65 @@ struct YAMLRuleLoaderTests {
         #expect(rule == nil)
     }
 
+    @Test("Revision 5 NIST tags map into versioned FISMA baselines")
+    func revisionFiveTagsMapToFISMA() throws {
+        let directory = try temporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let file = directory.appendingPathComponent("fisma.yaml")
+        try """
+        id: fisma_rule
+        title: FISMA Rule
+        discussion: Test rule
+        check: printf 1
+        result:
+          integer: 1
+        fix: printf fixed
+        tags:
+          - 800-53r5_moderate
+          - 800-53r4_moderate
+        references:
+          800-53r5:
+            - AC-11
+        severity: medium
+        """.write(to: file, atomically: true, encoding: .utf8)
+
+        let loaded = try YAMLRuleLoader.loadRule(from: file)
+        let rule = try #require(loaded)
+
+        #expect(rule.profiles.contains(.nist))
+        #expect(!rule.profiles.contains(.fismaLow))
+        #expect(rule.profiles.contains(.fismaModerate))
+        #expect(rule.profiles.contains(.fismaHigh))
+    }
+
+    @Test("FISMA profile overrides reject controls outside the selected baseline")
+    func fismaOverrideFailsClosed() throws {
+        let directory = try temporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let file = directory.appendingPathComponent("moderate-only.yaml")
+        try """
+        id: moderate_only
+        title: Moderate Only
+        discussion: Test rule
+        check: printf 1
+        result:
+          integer: 1
+        fix: printf fixed
+        tags:
+          - 800-53r5_moderate
+        references:
+          800-53r5:
+            - AC-11
+        severity: medium
+        """.write(to: file, atomically: true, encoding: .utf8)
+
+        let low = try YAMLRuleLoader.loadRule(from: file, overrideProfile: .fismaLow)
+        let moderate = try YAMLRuleLoader.loadRule(from: file, overrideProfile: .fismaModerate)
+
+        #expect(low == nil)
+        #expect(moderate?.profiles.contains(.fismaModerate) == true)
+    }
+
     private func temporaryDirectory() throws -> URL {
         let url = FileManager.default.temporaryDirectory
             .appendingPathComponent(UUID().uuidString, isDirectory: true)

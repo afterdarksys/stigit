@@ -87,6 +87,7 @@ public enum ReportExporter {
             "Waiver Reason", "Waiver Approved By", "Waiver Expires",
             "Labels", "Custom Tags", "Annotation Note", "Owner", "Ticket",
             "Due Date", "Annotation Updated At", "Annotation Updated By",
+            "Framework Version", "Impact Baseline", "Baseline Control Count",
             "Profile", "Hostname",
         ].joined(separator: ","))
 
@@ -112,6 +113,9 @@ public enum ReportExporter {
                 csvEscape(r.annotation?.dueDate.map { dateFormatter.string(from: $0) } ?? ""),
                 csvEscape(r.annotation.map { dateFormatter.string(from: $0.updatedAt) } ?? ""),
                 csvEscape(r.annotation?.updatedBy ?? ""),
+                csvEscape(report.framework?.version ?? ""),
+                csvEscape(report.framework?.baseline ?? ""),
+                csvEscape(report.framework.map { String($0.baselineControlCount) } ?? ""),
                 csvEscape(report.profileName),
                 csvEscape(report.endpoint.hostname),
             ].joined(separator: ","))
@@ -147,6 +151,8 @@ public enum ReportExporter {
             let annotationNote: String?
             let owner: String?
             let ticket: String?
+            let frameworkVersion: String?
+            let impactBaseline: String?
         }
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.sortedKeys]
@@ -170,7 +176,9 @@ public enum ReportExporter {
                 customTags: r.annotation?.customTags ?? [],
                 annotationNote: r.annotation?.note,
                 owner: r.annotation?.owner,
-                ticket: r.annotation?.ticket
+                ticket: r.annotation?.ticket,
+                frameworkVersion: report.framework?.version,
+                impactBaseline: report.framework?.baseline
             )
             return String(data: try encoder.encode(line), encoding: .utf8) ?? ""
         }.joined(separator: "\n")
@@ -189,6 +197,13 @@ public enum ReportExporter {
             + #"errors="\#(summary.errors)" skipped="\#(summary.waived + summary.unknown)" "#
             + #"timestamp="\#(ISO8601DateFormatter().string(from: report.generatedAt))">"#
         )
+        if let framework = report.framework {
+            lines.append("  <properties>")
+            lines.append(#"    <property name="fisma.baseline" value="\#(xmlEscape(framework.baseline))"/>"#)
+            lines.append(#"    <property name="nist.sp800-53.version" value="\#(xmlEscape(framework.version))"/>"#)
+            lines.append(#"    <property name="baseline.control-count" value="\#(framework.baselineControlCount)"/>"#)
+            lines.append("  </properties>")
+        }
         for r in report.results {
             let name = xmlEscape("\(r.id): \(r.title)")
             let classname = xmlEscape("stigit.\(report.profileKey).\(r.category)")
@@ -272,6 +287,12 @@ public enum ReportExporter {
             lines.append(" Serial   : \(serial)")
         }
         lines.append(" Date     : \(report.generatedAt)")
+        if let framework = report.framework {
+            lines.append(" Standard : \(framework.name)")
+            lines.append(" Baseline : \(framework.baseline), NIST SP 800-53B \(framework.version)")
+            lines.append(" Mapping  : \(report.assessedFrameworkControls.count) of \(framework.baselineControlCount) baseline controls have endpoint rule mappings")
+            lines.append(" Scope    : \(framework.scopeNote)")
+        }
         lines.append("=================================================")
         lines.append("")
         lines.append(String(format: " Score          : %.1f%%", summary.score * 100))

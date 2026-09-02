@@ -108,8 +108,17 @@ public enum YAMLRuleLoader {
 
         // --- Profiles from tags ---
         let tags = dict["tags"] as? [String] ?? []
-        var profiles = Set(tags.compactMap { ComplianceProfile.from(tag: $0) })
-        if let forced = overrideProfile { profiles.insert(forced) }
+        let hasRevision5Tag = tags.contains { $0.hasPrefix("800-53r5_") }
+        let isRevision4Only = !hasRevision5Tag && tags.contains { $0.hasPrefix("800-53r4_") }
+        var profiles = Set(tags.flatMap { ComplianceProfile.all(fromTag: $0) })
+        if let forced = overrideProfile {
+            if FISMAControlBaselines.controls(for: forced) != nil {
+                guard !isRevision4Only,
+                      FISMAControlBaselines.profiles(for: nist53r5).contains(forced)
+                else { return nil }
+            }
+            profiles.insert(forced)
+        }
         if profiles.isEmpty { profiles.insert(.other) }
 
         // --- Category from file path ---
@@ -137,7 +146,8 @@ public enum YAMLRuleLoader {
             expectedResult: expectedResult,
             remediateCommand: finalRemediate,
             executionContext: executionContext,
-            mobileconfig: mobileconfig
+            mobileconfig: mobileconfig,
+            mapNISTControlsToFISMA: !isRevision4Only
         )
     }
 

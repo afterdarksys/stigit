@@ -31,6 +31,9 @@ and the organization's normal authorization and risk-management process.
 |---|---|
 | DISA STIG for macOS | `stig` |
 | NIST SP 800-53 Rev 5 | `nist` |
+| FISMA Low Impact (NIST SP 800-53B 5.2.0) | `fisma-low` |
+| FISMA Moderate Impact (NIST SP 800-53B 5.2.0) | `fisma-moderate` |
+| FISMA High Impact (NIST SP 800-53B 5.2.0) | `fisma-high` |
 | NIST SP 800-171 Rev 3 | `nist171` |
 | CMMC Level 1 | `cmmc1` |
 | CMMC Level 2 | `cmmc2` |
@@ -41,6 +44,24 @@ and the organization's normal authorization and risk-management process.
 | ISO/IEC 27001 | `iso27001` |
 | GDPR | `gdpr` |
 | OS Tweaks / Misc | `other` |
+
+---
+
+### FISMA profile scope
+
+The FISMA profiles use the official NIST SP 800-53B version 5.2.0 OSCAL
+[Low, Moderate, and High baselines](https://github.com/usnistgov/oscal-content/tree/v1.5.0/nist.gov/SP800-53/rev5).
+They select StigIt rules whose NIST control references occur in the chosen baseline
+and stamp the baseline version, impact level, official control count, mapped-control
+count, source, and scope note into reports.
+
+This is endpoint technical assessment and evidence collection, not complete FISMA
+compliance or an Authority to Operate. Agencies must still perform FIPS 199 security
+categorization, select and tailor controls through the NIST Risk Management Framework,
+apply the privacy baseline where applicable, assess organization-level and nontechnical
+controls, authorize the system, and conduct continuous monitoring. See the official
+[NIST RMF guidance](https://csrc.nist.gov/Projects/risk-management/about-rmf)
+and [FIPS 200](https://csrc.nist.gov/pubs/fips/200/final).
 
 ---
 

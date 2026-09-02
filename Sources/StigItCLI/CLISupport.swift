@@ -340,6 +340,12 @@ enum CLIPipeline {
     private static func printText(report: ScanReport, quiet: Bool) {
         let summary = report.summary
         if !quiet {
+            if let framework = report.framework {
+                print("Framework: FISMA \(framework.baseline) Impact — NIST SP 800-53B \(framework.version)")
+                print("Endpoint mappings: \(report.assessedFrameworkControls.count) of \(framework.baselineControlCount) baseline controls")
+                print("Scope: \(framework.scopeNote)")
+                print()
+            }
             for severity in [RuleSeverity.high, .medium, .low] {
                 let group = report.results.filter { $0.severity == severity && $0.outcome != .unknown }
                 guard !group.isEmpty else { continue }

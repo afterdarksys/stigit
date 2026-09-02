@@ -67,4 +67,23 @@ struct MobileConfigGeneratorTests {
 
         #expect(settings["EnableFirewall"] as? Bool == true)
     }
+
+    @Test("FISMA configuration profiles preserve the authorization boundary")
+    @MainActor
+    func fismaDescriptionDoesNotOverclaim() throws {
+        let xml = MobileConfigGenerator.generate(
+            rules: RuleStore.defaultRules(), profile: .fismaModerate
+        )
+        let data = try #require(xml.data(using: .utf8))
+        let root = try #require(
+            try PropertyListSerialization.propertyList(
+                from: data, options: [], format: nil
+            ) as? [String: Any]
+        )
+
+        #expect(root["PayloadDisplayName"] as? String == "StigIt FISMA Moderate Impact Endpoint Controls")
+        #expect((root["PayloadDescription"] as? String)?.contains(
+            "does not establish FISMA compliance or authorization"
+        ) == true)
+    }
 }

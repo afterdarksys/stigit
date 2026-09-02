@@ -15,7 +15,7 @@ public enum RuleOutcome: String, Codable, CaseIterable, Sendable {
 public struct ScanReport: Codable, Sendable {
     private enum CodingKeys: String, CodingKey {
         case schemaVersion, generatedAt, endpoint, profileName, profileKey
-        case results, drift, summary
+        case results, drift, summary, framework, assessedFrameworkControls
     }
     public struct RuleResult: Codable, Sendable, Identifiable {
         public let id: String
@@ -55,13 +55,17 @@ public struct ScanReport: Codable, Sendable {
         public let fixes: [Change]
     }
 
-    public static let currentSchemaVersion = 2
+    public static let currentSchemaVersion = 3
 
     public let schemaVersion: Int
     public let generatedAt: Date
     public let endpoint: EndpointInfo
     public let profileName: String
     public let profileKey: String
+    public let framework: ComplianceFrameworkInfo?
+    /// Baseline controls with at least one mapped endpoint rule in this report.
+    /// This is mapping coverage, not a claim that the complete control was assessed.
+    public let assessedFrameworkControls: [String]
     public let results: [RuleResult]
     public var drift: Drift?
 
@@ -107,6 +111,7 @@ public struct ScanReport: Codable, Sendable {
         self.endpoint = endpoint
         self.profileName = profile.rawValue
         self.profileKey = profile.key
+        self.framework = profile.frameworkInfo
         self.results = rules
             .filter { $0.profiles.contains(profile) }
             .map { rule in
@@ -135,12 +140,20 @@ public struct ScanReport: Codable, Sendable {
                     )
                 )
             }
+        if let baseline = FISMAControlBaselines.controls(for: profile) {
+            self.assessedFrameworkControls = Array(Set(results
+                .flatMap(\.nistControls)
+                .map(FISMAControlBaselines.normalize))
+                .intersection(baseline)).sorted()
+        } else {
+            self.assessedFrameworkControls = []
+        }
     }
 
     public init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         let version = try container.decode(Int.self, forKey: .schemaVersion)
-        guard version == 1 || version == Self.currentSchemaVersion else {
+        guard (1...Self.currentSchemaVersion).contains(version) else {
             throw DecodingError.dataCorruptedError(
                 forKey: .schemaVersion,
                 in: container,
@@ -153,6 +166,10 @@ public struct ScanReport: Codable, Sendable {
         profileName = try container.decode(String.self, forKey: .profileName)
         profileKey = try container.decode(String.self, forKey: .profileKey)
         results = try container.decode([RuleResult].self, forKey: .results)
+        framework = try container.decodeIfPresent(ComplianceFrameworkInfo.self, forKey: .framework)
+        assessedFrameworkControls = try container.decodeIfPresent(
+            [String].self, forKey: .assessedFrameworkControls
+        ) ?? []
         drift = try container.decodeIfPresent(Drift.self, forKey: .drift)
         // `summary` is derived from results. Decode is intentionally optional so
         // schema-v1 reports produced before it was explicitly encoded still load.
@@ -166,6 +183,8 @@ public struct ScanReport: Codable, Sendable {
         try container.encode(endpoint, forKey: .endpoint)
         try container.encode(profileName, forKey: .profileName)
         try container.encode(profileKey, forKey: .profileKey)
+        try container.encodeIfPresent(framework, forKey: .framework)
+        try container.encode(assessedFrameworkControls, forKey: .assessedFrameworkControls)
         try container.encode(results, forKey: .results)
         try container.encodeIfPresent(drift, forKey: .drift)
         try container.encode(summary, forKey: .summary)

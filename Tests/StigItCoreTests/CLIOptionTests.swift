@@ -4,6 +4,13 @@ import Testing
 
 @Suite("CLI option parsing")
 struct CLIOptionTests {
+    @Test("FISMA impact profiles are accepted by the CLI")
+    func fismaProfilesParse() {
+        #expect(ScanOptions.parse(ArgScanner(["--profile", "fisma-low"]))?.profile == .fismaLow)
+        #expect(ScanOptions.parse(ArgScanner(["--profile", "fisma-moderate"]))?.profile == .fismaModerate)
+        #expect(ScanOptions.parse(ArgScanner(["--profile", "fisma-high"]))?.profile == .fismaHigh)
+    }
+
     @Test("A value option without a value is rejected")
     func missingProfileValueIsRejected() {
         let options = ScanOptions.parse(ArgScanner(["--profile"]))

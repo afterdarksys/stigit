@@ -3,6 +3,9 @@ import Foundation
 public enum ComplianceProfile: String, Codable, CaseIterable, Sendable, Identifiable {
     case stig     = "DISA STIG"
     case nist     = "NIST 800-53"
+    case fismaLow = "FISMA Low Impact"
+    case fismaModerate = "FISMA Moderate Impact"
+    case fismaHigh = "FISMA High Impact"
     case soc2     = "SOC2"
     case iso27001 = "ISO/IEC 27001"
     case gdpr     = "GDPR"
@@ -24,6 +27,9 @@ public enum ComplianceProfile: String, Codable, CaseIterable, Sendable, Identifi
         switch self {
         case .stig:     return "stig"
         case .nist:     return "nist"
+        case .fismaLow: return "fisma-low"
+        case .fismaModerate: return "fisma-moderate"
+        case .fismaHigh: return "fisma-high"
         case .soc2:     return "soc2"
         case .iso27001: return "iso27001"
         case .gdpr:     return "gdpr"
@@ -60,6 +66,45 @@ public enum ComplianceProfile: String, Codable, CaseIterable, Sendable, Identifi
         default:                            return nil
         }
     }
+
+    /// One tag can contribute both the general NIST profile and a versioned
+    /// FISMA impact baseline. Revision 4 tags intentionally remain NIST-only.
+    public static func all(fromTag tag: String) -> [ComplianceProfile] {
+        switch tag {
+        case "800-53r5_low":      return [.nist, .fismaLow]
+        case "800-53r5_moderate": return [.nist, .fismaModerate]
+        case "800-53r5_high":     return [.nist, .fismaHigh]
+        default:                   return from(tag: tag).map { [$0] } ?? []
+        }
+    }
+
+    public var frameworkInfo: ComplianceFrameworkInfo? {
+        guard let controls = FISMAControlBaselines.controls(for: self) else { return nil }
+        let baseline: String
+        switch self {
+        case .fismaLow:      baseline = "Low"
+        case .fismaModerate: baseline = "Moderate"
+        case .fismaHigh:     baseline = "High"
+        default:             return nil
+        }
+        return ComplianceFrameworkInfo(
+            name: "Federal Information Security Modernization Act (FISMA)",
+            version: FISMAControlBaselines.version,
+            baseline: baseline,
+            baselineControlCount: controls.count,
+            source: FISMAControlBaselines.source,
+            scopeNote: FISMAControlBaselines.scopeNote
+        )
+    }
+}
+
+public struct ComplianceFrameworkInfo: Codable, Hashable, Sendable {
+    public let name: String
+    public let version: String
+    public let baseline: String
+    public let baselineControlCount: Int
+    public let source: String
+    public let scopeNote: String
 }
 
 public enum RuleCategory: String, Codable, CaseIterable, Sendable, Identifiable {
@@ -157,12 +202,20 @@ public struct Rule: Identifiable, Codable, Hashable, Sendable {
         executionContext: RuleExecutionContext = .system,
         mobileconfig: Bool = false,
         status: RuleStatus = .unknown,
-        isSelectedForRemediation: Bool = true
+        isSelectedForRemediation: Bool = true,
+        mapNISTControlsToFISMA: Bool = true
     ) {
         self.id = id
         self.title = title
         self.description = description
-        self.profiles = profiles
+        var resolvedProfiles = profiles
+        if mapNISTControlsToFISMA && profiles.contains(.nist) {
+            for profile in FISMAControlBaselines.profiles(for: nistControls)
+                where !resolvedProfiles.contains(profile) {
+                resolvedProfiles.append(profile)
+            }
+        }
+        self.profiles = resolvedProfiles
         self.category = category
         self.severity = severity
         self.stigId = stigId

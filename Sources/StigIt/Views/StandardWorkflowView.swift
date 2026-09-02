@@ -47,6 +47,10 @@ struct StandardWorkflowView: View {
                     .padding(.trailing, 12)
                 }
                 Divider()
+                if let framework = profile.frameworkInfo {
+                    frameworkBanner(framework)
+                    Divider()
+                }
                 ruleList
                 Divider()
                 actionBar
@@ -112,6 +116,25 @@ struct StandardWorkflowView: View {
                 }
             }
         }
+    }
+
+    private func frameworkBanner(_ framework: ComplianceFrameworkInfo) -> some View {
+        HStack(alignment: .top, spacing: 10) {
+            Image(systemName: "building.columns.circle.fill")
+                .foregroundColor(.accentColor)
+            VStack(alignment: .leading, spacing: 2) {
+                Text("\(framework.baseline) impact baseline · NIST SP 800-53B \(framework.version)")
+                    .font(.subheadline).bold()
+                Text(framework.scopeNote)
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            Spacer()
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 9)
+        .background(Color.accentColor.opacity(0.07))
     }
 
     // MARK: - Toolbar
